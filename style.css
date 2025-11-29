@@ -347,6 +347,8 @@ CreateFileModal {
     width: 70%;
     height: 100%;
     padding: 1;
+    overflow-y: auto;
+    scrollbar-size-vertical: 2;
 }
 
 #api-config {
