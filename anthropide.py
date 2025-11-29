@@ -19,6 +19,7 @@ from textual.screen import Screen
 from textual.widgets import (
     Button,
     Checkbox,
+    Collapsible,
     Footer,
     Header,
     Input,
@@ -364,33 +365,6 @@ class FileCreated(TextualMessage):
 class MessageWidget(Vertical):
     """Display a single message with edit controls"""
 
-    DEFAULT_CSS = """
-    MessageWidget {
-        border: solid $primary;
-        padding: 1;
-        margin: 1 0;
-        height: auto;
-    }
-
-    MessageWidget .message-header {
-        height: 3;
-    }
-
-    MessageWidget .role-select {
-        width: 15;
-    }
-
-    MessageWidget TextArea {
-        height: 10;
-        margin-top: 1;
-    }
-
-    MessageWidget .btn-small {
-        width: 5;
-        margin: 0 1;
-    }
-    """
-
     def __init__(self, message: Message, index: int, total: int):
         super().__init__()
         self.message = message
@@ -398,23 +372,28 @@ class MessageWidget(Vertical):
         self.total = total
 
     def compose(self) -> ComposeResult:
-        with Horizontal(classes="message-header"):
-            # Validate role - default to "user" if invalid
-            valid_role = self.message.role if self.message.role in ("user", "assistant") else "user"
-            yield Select(
-                [("user", "user"), ("assistant", "assistant")],
-                value=valid_role,
-                id=f"role-{self.message.id}",
-                classes="role-select",
-            )
-            if self.index > 0:
-                yield Button("↑", id=f"up-{self.message.id}", classes="btn-small")
-            if self.index < self.total - 1:
-                yield Button("↓", id=f"down-{self.message.id}", classes="btn-small")
-            yield Button("Delete", variant="error", id=f"delete-{self.message.id}")
-
+        # Get content preview for title
         content = self.message.content[0].text if self.message.content else ""
-        yield TextArea(content, language="markdown", id=f"content-{self.message.id}")
+        preview = content[:50] + "..." if len(content) > 50 else content
+        title = f"{self.message.role.capitalize()} - {preview}" if preview else f"{self.message.role.capitalize()} message"
+
+        with Collapsible(title=title, collapsed=False):
+            with Horizontal(classes="message-header"):
+                # Validate role - default to "user" if invalid
+                valid_role = self.message.role if self.message.role in ("user", "assistant") else "user"
+                yield Select(
+                    [("user", "user"), ("assistant", "assistant")],
+                    value=valid_role,
+                    id=f"role-{self.message.id}",
+                    classes="role-select",
+                )
+                if self.index > 0:
+                    yield Button("↑", id=f"up-{self.message.id}", classes="btn btn-tiny")
+                if self.index < self.total - 1:
+                    yield Button("↓", id=f"down-{self.message.id}", classes="btn btn-tiny")
+                yield Button("Delete", variant="error", id=f"delete-{self.message.id}", classes="btn btn-delete")
+
+            yield TextArea(content, language="markdown", id=f"content-{self.message.id}")
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id.startswith("delete-"):
@@ -441,29 +420,6 @@ class MessageWidget(Vertical):
 class SystemBlockWidget(Vertical):
     """Display a system prompt block"""
 
-    DEFAULT_CSS = """
-    SystemBlockWidget {
-        border: solid $warning;
-        padding: 1;
-        margin: 1 0;
-        height: auto;
-    }
-
-    SystemBlockWidget .block-header {
-        height: 3;
-    }
-
-    SystemBlockWidget TextArea {
-        height: 8;
-        margin-top: 1;
-    }
-
-    SystemBlockWidget .btn-small {
-        width: 5;
-        margin: 0 1;
-    }
-    """
-
     def __init__(self, block: SystemBlock, index: int, total: int):
         super().__init__()
         self.block = block
@@ -471,20 +427,25 @@ class SystemBlockWidget(Vertical):
         self.total = total
 
     def compose(self) -> ComposeResult:
-        with Horizontal(classes="block-header"):
-            yield Label(f"System Block {self.index + 1}")
-            yield Checkbox(
-                "Enable caching",
-                value=self.block.cache_control is not None,
-                id=f"cache-{self.block.id}",
-            )
-            if self.index > 0:
-                yield Button("↑", id=f"up-{self.block.id}", classes="btn-small")
-            if self.index < self.total - 1:
-                yield Button("↓", id=f"down-{self.block.id}", classes="btn-small")
-            yield Button("Delete", variant="error", id=f"delete-{self.block.id}")
+        # Get text preview for title
+        preview = self.block.text[:50] + "..." if len(self.block.text) > 50 else self.block.text
+        title = f"System Block {self.index + 1} - {preview}" if preview else f"System Block {self.index + 1}"
 
-        yield TextArea(self.block.text, language="markdown", id=f"text-{self.block.id}")
+        with Collapsible(title=title, collapsed=False):
+            with Horizontal(classes="block-header"):
+                yield Label(f"System Block {self.index + 1}", classes="widget-heading")
+                yield Checkbox(
+                    "Enable caching",
+                    value=self.block.cache_control is not None,
+                    id=f"cache-{self.block.id}",
+                )
+                if self.index > 0:
+                    yield Button("↑", id=f"up-{self.block.id}", classes="btn btn-tiny")
+                if self.index < self.total - 1:
+                    yield Button("↓", id=f"down-{self.block.id}", classes="btn btn-tiny")
+                yield Button("Delete", variant="error", id=f"delete-{self.block.id}", classes="btn btn-delete")
+
+            yield TextArea(self.block.text, language="markdown", id=f"text-{self.block.id}")
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id.startswith("delete-"):
@@ -512,48 +473,30 @@ class SystemBlockWidget(Vertical):
 class ToolWidget(Vertical):
     """Display a tool definition"""
 
-    DEFAULT_CSS = """
-    ToolWidget {
-        border: solid $accent;
-        padding: 1;
-        margin: 1 0;
-        height: auto;
-    }
-
-    ToolWidget .tool-header {
-        height: 3;
-    }
-
-    ToolWidget Input {
-        margin: 1 0;
-    }
-
-    ToolWidget TextArea {
-        height: 8;
-    }
-    """
-
     def __init__(self, tool: Tool):
         super().__init__()
         self.tool = tool
 
     def compose(self) -> ComposeResult:
-        with Horizontal(classes="tool-header"):
-            yield Label(f"Tool: {self.tool.name}")
-            yield Button("Delete", variant="error", id=f"delete-{self.tool.id}")
+        title = f"Tool: {self.tool.name}"
 
-        yield Label("Name:")
-        yield Input(value=self.tool.name, id=f"name-{self.tool.id}")
+        with Collapsible(title=title, collapsed=False):
+            with Horizontal(classes="tool-header"):
+                yield Label(f"Tool: {self.tool.name}", classes="widget-heading")
+                yield Button("Delete", variant="error", id=f"delete-{self.tool.id}", classes="btn btn-delete")
 
-        yield Label("Description:")
-        yield Input(value=self.tool.description, id=f"desc-{self.tool.id}")
+            yield Label("Name:")
+            yield Input(value=self.tool.name, id=f"name-{self.tool.id}")
 
-        yield Label("Input Schema (JSON):")
-        yield TextArea(
-            json.dumps(self.tool.input_schema, indent=2),
-            language="json",
-            id=f"schema-{self.tool.id}",
-        )
+            yield Label("Description:")
+            yield Input(value=self.tool.description, id=f"desc-{self.tool.id}")
+
+            yield Label("Input Schema (JSON):")
+            yield TextArea(
+                json.dumps(self.tool.input_schema, indent=2),
+                language="json",
+                id=f"schema-{self.tool.id}",
+            )
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id.startswith("delete-"):
@@ -581,17 +524,6 @@ class ToolWidget(Vertical):
 class ContextFileWidget(Horizontal):
     """Display a context file checkbox"""
 
-    DEFAULT_CSS = """
-    ContextFileWidget {
-        height: auto;
-        padding: 0 1;
-    }
-
-    ContextFileWidget Checkbox {
-        width: 1fr;
-    }
-    """
-
     def __init__(self, file_path: Path, section: str, selected: bool):
         super().__init__()
         self.file_path = file_path
@@ -616,18 +548,68 @@ class ContextFileWidget(Horizontal):
         )
 
 
+class SelectedContextWidget(Horizontal):
+    """Display a selected context file in the main area"""
+
+    def __init__(self, ctx_file: ContextFile):
+        super().__init__()
+        self.ctx_file = ctx_file
+
+    def compose(self) -> ComposeResult:
+        file_path = Path(self.ctx_file.path)
+        # Calculate token count
+        try:
+            with open(file_path) as f:
+                content = f.read()
+            encoding = tiktoken.get_encoding("cl100k_base")
+            token_count = len(encoding.encode(content))
+            label = f"[{self.ctx_file.section}] {file_path.name} ({token_count} tokens)"
+        except Exception:
+            label = f"[{self.ctx_file.section}] {file_path.name}"
+
+        yield Label(label)
+        yield Button("✕", variant="error", id=f"remove-ctx-{file_path.stem}", classes="btn btn-action")
+
+    def on_button_pressed(self, event: Button.Pressed):
+        if event.button.id and event.button.id.startswith("remove-ctx-"):
+            # Post a custom message to remove this context
+            self.post_message(DeleteItem(self.ctx_file.path))
+            event.stop()
+
+
 # ============================================================================
 # CONTAINER WIDGETS (Smart Containers)
 # ============================================================================
 
+class SelectedContextsList(Vertical):
+    """Container showing selected context files"""
+
+    def __init__(self, session: Session):
+        super().__init__()
+        self.session = session
+
+    def compose(self) -> ComposeResult:
+        with Horizontal(classes="contexts-header-row"):
+            yield Label("Selected Context Files", classes="widget-heading")
+
+        for ctx in self.session.selected_contexts:
+            yield SelectedContextWidget(ctx)
+
+    def refresh_contexts(self, session: Session):
+        """Rebuild contexts list"""
+        self.session = session
+        self.remove_children()
+
+        header = Horizontal(classes="contexts-header-row")
+        header.mount(Label("Selected Context Files", classes="widget-heading"))
+        self.mount(header)
+
+        for ctx in self.session.selected_contexts:
+            self.mount(SelectedContextWidget(ctx))
+
+
 class MessageList(VerticalScroll):
     """Container for all messages"""
-
-    DEFAULT_CSS = """
-    MessageList {
-        height: 1fr;
-    }
-    """
 
     def __init__(self, session: Session):
         super().__init__()
@@ -643,16 +625,12 @@ class MessageList(VerticalScroll):
         self.remove_children()
         for idx, message in enumerate(self.session.messages):
             self.mount(MessageWidget(message, idx, len(self.session.messages)))
+        # Auto-scroll to bottom after mounting new widgets
+        self.call_after_refresh(self.scroll_end)
 
 
 class SystemBlockList(VerticalScroll):
     """Container for system blocks"""
-
-    DEFAULT_CSS = """
-    SystemBlockList {
-        height: auto;
-    }
-    """
 
     def __init__(self, session: Session):
         super().__init__()
@@ -661,7 +639,7 @@ class SystemBlockList(VerticalScroll):
     def compose(self) -> ComposeResult:
         with Horizontal(classes="section-header-row"):
             yield Label("System Prompt", classes="section-header")
-            yield Button("+ Add Block", variant="success", id="add-system-block", classes="btn-small")
+            yield Button("+ Add Block", variant="success", id="add-system-block", classes="btn btn-small")
 
         for idx, block in enumerate(self.session.system_blocks):
             yield SystemBlockWidget(block, idx, len(self.session.system_blocks))
@@ -673,7 +651,7 @@ class SystemBlockList(VerticalScroll):
 
         header = Horizontal(classes="section-header-row")
         header.mount(Label("System Prompt", classes="section-header"))
-        header.mount(Button("+ Add Block", variant="success", id="add-system-block", classes="btn-small"))
+        header.mount(Button("+ Add Block", variant="success", id="add-system-block", classes="btn btn-small"))
         self.mount(header)
 
         for idx, block in enumerate(self.session.system_blocks):
@@ -683,12 +661,6 @@ class SystemBlockList(VerticalScroll):
 class ToolList(VerticalScroll):
     """Container for tools"""
 
-    DEFAULT_CSS = """
-    ToolList {
-        height: auto;
-    }
-    """
-
     def __init__(self, session: Session):
         super().__init__()
         self.session = session
@@ -696,7 +668,7 @@ class ToolList(VerticalScroll):
     def compose(self) -> ComposeResult:
         with Horizontal(classes="section-header-row"):
             yield Label("Tools", classes="section-header")
-            yield Button("+ Add Tool", variant="success", id="add-tool", classes="btn-small")
+            yield Button("+ Add Tool", variant="success", id="add-tool", classes="btn btn-small")
 
         for tool in self.session.tools:
             yield ToolWidget(tool)
@@ -708,7 +680,7 @@ class ToolList(VerticalScroll):
 
         header = Horizontal(classes="section-header-row")
         header.mount(Label("Tools", classes="section-header"))
-        header.mount(Button("+ Add Tool", variant="success", id="add-tool", classes="btn-small"))
+        header.mount(Button("+ Add Tool", variant="success", id="add-tool", classes="btn btn-small"))
         self.mount(header)
 
         for tool in self.session.tools:
@@ -718,33 +690,6 @@ class ToolList(VerticalScroll):
 class ContextFileList(VerticalScroll):
     """Sidebar showing available context files"""
 
-    DEFAULT_CSS = """
-    ContextFileList {
-        width: 30%;
-        height: 100%;
-        border-right: solid $primary;
-        padding: 1;
-    }
-
-    ContextFileList .context-files-header {
-        text-style: bold;
-        text-align: center;
-        background: $primary;
-        padding: 1;
-        margin: 0 0 2 0;
-        border: heavy $primary;
-    }
-
-    ContextFileList .header-row {
-        height: auto;
-        margin: 0 0 2 0;
-    }
-
-    ContextFileList .new-file-btn {
-        width: 1fr;
-    }
-    """
-
     def __init__(self, project: Project, session: Session):
         super().__init__()
         self.project = project
@@ -752,8 +697,8 @@ class ContextFileList(VerticalScroll):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="header-row"):
-            yield Label("Context Files", classes="context-files-header")
-            yield Button("+ New File", variant="success", id="new-file-btn", classes="new-file-btn")
+            yield Label("Context Files", classes="widget-heading")
+            yield Button("+ New File", variant="success", id="new-file-btn", classes="btn new-file-btn")
 
         selected_paths = {ctx.path for ctx in self.session.selected_contexts}
 
@@ -771,8 +716,8 @@ class ContextFileList(VerticalScroll):
         self.remove_children()
 
         header = Vertical(classes="header-row")
-        header.mount(Label("Context Files", classes="context-files-header"))
-        header.mount(Button("+ New File", variant="success", id="new-file-btn", classes="new-file-btn"))
+        header.mount(Label("Context Files", classes="widget-heading"))
+        header.mount(Button("+ New File", variant="success", id="new-file-btn", classes="btn new-file-btn"))
         self.mount(header)
 
         selected_paths = {ctx.path for ctx in self.session.selected_contexts}
@@ -805,61 +750,6 @@ class CreateFileModal(Screen):
     """Modal for creating a new context file"""
 
     BINDINGS = [Binding("escape", "cancel", "Cancel")]
-
-    CSS = """
-    CreateFileModal {
-        align: center middle;
-    }
-
-    #modal-container {
-        width: 80%;
-        height: 85%;
-        background: $surface;
-        border: heavy $primary;
-        padding: 2;
-    }
-
-    #modal-title {
-        text-align: center;
-        text-style: bold;
-        background: $primary;
-        padding: 1;
-        margin: 0 0 2 0;
-    }
-
-    #form-container {
-        height: 1fr;
-    }
-
-    .form-row {
-        height: auto;
-        margin: 1 0;
-    }
-
-    .form-label {
-        width: 15;
-        padding: 0 1;
-    }
-
-    .form-input {
-        width: 1fr;
-    }
-
-    #content-editor {
-        height: 1fr;
-        margin: 2 0;
-    }
-
-    #button-row {
-        height: 3;
-        margin: 2 0 0 0;
-    }
-
-    #button-row Button {
-        width: 1fr;
-        margin: 0 1;
-    }
-    """
 
     def __init__(self, project: Project):
         super().__init__()
@@ -900,8 +790,8 @@ class CreateFileModal(Screen):
                 )
 
             with Horizontal(id="button-row"):
-                yield Button("Save", variant="success", id="save-file-btn")
-                yield Button("Cancel", variant="error", id="cancel-file-btn")
+                yield Button("Save", variant="success", id="save-file-btn", classes="btn")
+                yield Button("Cancel", variant="error", id="cancel-file-btn", classes="btn")
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "save-file-btn":
@@ -952,34 +842,6 @@ class ProjectSelectScreen(Screen):
 
     BINDINGS = [Binding("ctrl+c", "quit", "Quit")]
 
-    CSS = """
-    #project-select {
-        width: 100%;
-        height: 100%;
-        padding: 2;
-    }
-
-    .title {
-        text-align: center;
-        text-style: bold;
-        padding: 1;
-        background: $primary;
-    }
-
-    #project-list {
-        height: auto;
-        max-height: 20;
-        margin: 1 0;
-        border: solid $primary;
-        padding: 1;
-    }
-
-    #create-project {
-        padding: 1;
-        border: solid $success;
-    }
-    """
-
     def __init__(self, base_dir: Path):
         super().__init__()
         self.base_dir = base_dir
@@ -994,14 +856,14 @@ class ProjectSelectScreen(Screen):
                 projects = Project.list_projects(self.base_dir)
                 if projects:
                     for project_name in projects:
-                        yield Button(project_name, id=f"project-{project_name}", variant="primary")
+                        yield Button(project_name, id=f"project-{project_name}", variant="primary", classes="btn")
                 else:
                     yield Label("No projects found. Create one below.")
 
             with Container(id="create-project"):
                 yield Label("Create New Project")
                 yield Input(placeholder="Project name", id="new-project-input")
-                yield Button("Create", variant="success", id="create-project-btn")
+                yield Button("Create", variant="success", id="create-project-btn", classes="btn")
 
         yield Footer()
 
@@ -1040,70 +902,6 @@ class MainScreen(Screen):
         Binding("ctrl+s", "save", "Save"),
     ]
 
-    CSS = """
-    #main-container {
-        width: 100%;
-        height: 1fr;
-    }
-
-    #editor {
-        width: 70%;
-        height: 100%;
-        padding: 1;
-    }
-
-    #api-config {
-        border: solid $success;
-        padding: 1;
-        margin: 1 0;
-    }
-
-    .api-config-row {
-        height: 3;
-        margin: 1 0;
-    }
-
-    .api-config-label {
-        width: 15;
-    }
-
-    .api-config-input {
-        width: 1fr;
-    }
-
-    #messages-section {
-        margin: 1 0;
-    }
-
-    .messages-header {
-        height: 3;
-        margin: 1 0;
-    }
-
-    .section-header {
-        text-style: bold;
-        background: $primary;
-        padding: 0 1;
-        width: 1fr;
-    }
-
-    .section-header-row {
-        height: 3;
-        margin: 1 0;
-    }
-
-    .subsection-header {
-        text-style: bold;
-        padding: 0 1;
-        margin: 1 0 0 0;
-    }
-
-    .btn-small {
-        width: auto;
-        margin: 0 1;
-    }
-    """
-
     def __init__(self, project: Project):
         super().__init__()
         self.project = project
@@ -1141,12 +939,13 @@ class MainScreen(Screen):
 
                 yield SystemBlockList(self.session)
                 yield ToolList(self.session)
+                yield SelectedContextsList(self.session)
 
                 with Vertical(id="messages-section"):
                     with Horizontal(classes="messages-header"):
                         yield Label("Messages", classes="section-header")
-                        yield Button("New Session", variant="warning", id="new-session", classes="btn-small")
-                        yield Button("+ Add Message", variant="success", id="add-message", classes="btn-small")
+                        yield Button("New Session", variant="warning", id="new-session", classes="btn btn-small")
+                        yield Button("+ Add Message", variant="success", id="add-message", classes="btn btn-small")
 
                     yield MessageList(self.session)
 
@@ -1181,6 +980,10 @@ class MainScreen(Screen):
         elif any(tool.id == event.item_id for tool in self.session.tools):
             self.session.tools = [t for t in self.session.tools if t.id != event.item_id]
             self.save_and_refresh_tools()
+
+        elif any(ctx.path == event.item_id for ctx in self.session.selected_contexts):
+            self.session.selected_contexts = [c for c in self.session.selected_contexts if c.path != event.item_id]
+            self.save_and_refresh_contexts()
 
     def on_move_item(self, event: MoveItem):
         """Handle move requests"""
@@ -1261,7 +1064,7 @@ class MainScreen(Screen):
                                 ctx for ctx in self.session.selected_contexts
                                 if ctx.path != str(file_path)
                             ]
-                        self.save()
+                        self.save_and_refresh_contexts()
                         return
 
     def on_select_changed(self, event: Select.Changed):
@@ -1305,6 +1108,12 @@ class MainScreen(Screen):
         """Save and rebuild tools"""
         self.save()
         self.query_one(ToolList).refresh_tools(self.session)
+
+    def save_and_refresh_contexts(self):
+        """Save and rebuild context files"""
+        self.save()
+        self.query_one(SelectedContextsList).refresh_contexts(self.session)
+        self.query_one(ContextFileList).refresh_files(self.session)
 
     def add_message(self):
         """Add a new message"""
@@ -1352,6 +1161,7 @@ class MainScreen(Screen):
         self.query_one(MessageList).refresh_messages(self.session)
         self.query_one(SystemBlockList).refresh_blocks(self.session)
         self.query_one(ToolList).refresh_tools(self.session)
+        self.query_one(SelectedContextsList).refresh_contexts(self.session)
         self.query_one(ContextFileList).refresh_files(self.session)
 
     def action_save(self):
@@ -1368,6 +1178,8 @@ class MainScreen(Screen):
 
 class AnthropIDEApp(App):
     """Main application"""
+
+    CSS_PATH = "style.css"
 
     def on_mount(self):
         base_dir = Path(".anthropide/projects")
