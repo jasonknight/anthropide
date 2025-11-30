@@ -63,9 +63,10 @@ AnthropIDE is a web-based context/prompt engineering platform that enables users
 │  │  project_name/                              │   │
 │  │    ├── current_session.json                 │   │
 │  │    ├── current_session.json.202511301430    │   │
-│  │    ├── state.json                           │   │
+│  │    ├── project.json                         │   │
+│  │    ├── requirements.txt                     │   │
 │  │    ├── agents/*.md                          │   │
-│  │    ├── skills/*/main.md                     │   │
+│  │    ├── skills/*.md                          │   │
 │  │    ├── tools/*.{json,py}                    │   │
 │  │    ├── snippets/**/*.md                     │   │
 │  │    └── tests/config.json                    │   │
@@ -164,23 +165,29 @@ anthropide/
 │       ├── snippet_browser.html
 │       └── modals.html
 │
-└── projects/                   # User projects
-    └── example_project/
-        ├── agents/
-        ├── skills/
-        ├── tools/
-        ├── snippets/
-        ├── tests/
-        ├── current_session.json
-        ├── current_session.json.TIMESTAMP
-        └── state.json
+├── projects/                   # User projects
+│   └── example_project/
+│       ├── agents/             # Agent definitions (*.md)
+│       ├── skills/             # Skill definitions (*.md, flat structure)
+│       ├── tools/              # Tool definitions (*.json, *.py)
+│       ├── snippets/           # Reusable snippets (**/*.md, nested categories)
+│       ├── tests/              # Test configuration
+│       │   └── config.json
+│       ├── current_session.json        # Current API request state
+│       ├── current_session.json.*      # Timestamped backups
+│       ├── project.json                # Project metadata
+│       └── requirements.txt            # Python dependencies for tools
+│
+└── state.json                  # Global UI state (at app root level)
 ```
 
 ---
 
 ## 3. Data Models
 
-### 3.1 Project Structure
+### 3.1 Project Metadata (project.json)
+
+This file is stored at `projects/<project_name>/project.json` and contains project metadata:
 
 ```json
 {
@@ -192,9 +199,21 @@ anthropide/
     "max_session_backups": 20,
     "auto_save": true,
     "default_model": "claude-sonnet-4-5-20250929"
+  },
+  "package_config": {
+    "api_key_strategy": "cli_argument",
+    "dependencies_checked": false
   }
 }
 ```
+
+**Package Config Fields**:
+- `api_key_strategy`: How the packaged CLI should handle API keys
+  - `"cli_argument"`: Require `--api-key` flag or ANTHROPIC_API_KEY env var (default, most secure)
+  - `"env_file"`: Look for `.env` file in project directory
+  - `"embedded"`: API key embedded in package (creates `.api_key` file, user should be warned)
+  - `"prompt"`: Prompt user on first run and optionally save
+- `dependencies_checked`: Whether dependency check should be enforced on CLI startup (default: true)
 
 ### 3.2 Session (current_session.json)
 
@@ -273,6 +292,15 @@ The session file is a complete Anthropic API request structure:
 
 ### 3.3 Agent Definition (agents/*.md)
 
+**Execution Model**: Agents work like Claude Code's Task tool. During execution, the model can spawn agents using a special `Task` tool. When an agent is spawned:
+1. A new Anthropic API request is created with the agent's configuration
+2. The agent's system prompt replaces/augments the parent system prompt
+3. The agent has access only to its specified tools and skills
+4. The agent's model setting can override the parent model
+5. The agent executes autonomously and returns results to the parent conversation
+
+Agents are **not** selected upfront - they're spawned dynamically by the model during execution.
+
 ```yaml
 ---
 name: code-reviewer
@@ -283,7 +311,6 @@ model: inherit
 tools: Read, Grep, Glob
 skills: code-analysis, security-scan
 color: blue
-permissionMode: default
 ---
 
 You are an expert code reviewer. Your task is to analyze code for:
@@ -297,40 +324,136 @@ Review the code thoroughly and provide actionable feedback.
 
 **Field Descriptions:**
 - `name`: Unique identifier for the agent (alphanumeric with hyphens)
-- `description`: When and why to use this agent (used in UI and documentation)
+- `description`: When and why to use this agent (shown to parent model in Task tool description)
 - `model`: Model to use (`inherit` uses parent's model, or specify like `claude-sonnet-4-5-20250929`)
-- `tools`: Comma-separated list of tool names available to this agent
-- `skills`: Comma-separated list of skill names available to this agent
-- `color`: UI color for visual identification (red, blue, green, yellow, purple, etc.)
-- `permissionMode`: `default` (inherit from parent), `auto` (auto-execute tools), `prompt` (ask for approval)
+- `tools`: Comma-separated list of tool names available to this agent (subset of project tools)
+- `skills`: Comma-separated list of skill names available to this agent (loaded into agent's system prompt)
+- `color`: UI color for visual identification in logs/UI (red, blue, green, yellow, purple, etc.)
 
-### 3.4 Skill Definition (skills/*/main.md)
+**Note**: `permissionMode` removed - all agents have full tool execution permissions (no sandboxing)
+
+### 3.4 Skill Definition (skills/*.md)
+
+**Execution Model**: Skills are markdown files containing role/context descriptions that get added to the system prompt (with caching) when an agent uses them. They explain how to accomplish tasks using available tools.
+
+Skills are **instructional, not executable** - they teach the model how to use tools to accomplish complex workflows.
+
+**File Structure**: `skills/web-search.md` (flat structure, not subdirectories)
 
 ```yaml
 ---
 name: web-search
-description: Search the web for current information
+description: Search the web for current information using available tools
 version: 1.0.0
 author: Your Name
 ---
 
 # Web Search Skill
 
-This skill provides web search capabilities using DuckDuckGo.
+This skill explains how to search the web for current information.
 
-## Usage
+## Available Tools
 
-When you need current information not in your training data, use this skill.
+You have access to:
+- `WebFetch`: Fetch and parse web pages
+- `Read`: Read local files
+- `Write`: Save results to files
 
-## Commands
+## Workflow
 
-- `search <query>` - Search the web
-- `summarize <url>` - Summarize a webpage
+To search the web for information:
+
+1. **Identify search query** - Extract key terms from user request
+2. **Use WebFetch** - Fetch search engine results page (e.g., `https://duckduckgo.com/?q=search+terms`)
+3. **Parse results** - Extract relevant URLs from the HTML
+4. **Fetch top results** - Use WebFetch on the top 3-5 result URLs
+5. **Synthesize** - Combine information and cite sources
+6. **Save if needed** - Use Write to save detailed results
+
+## Example
+
+User asks: "What are the latest developments in quantum computing?"
+
+1. WebFetch(`https://duckduckgo.com/?q=latest+quantum+computing+developments`)
+2. Parse result URLs
+3. WebFetch each top result
+4. Summarize findings with citations
 ```
 
-Additional files in the skill directory (e.g., `search.py`, `utils.sh`) are accessible to the skill implementation.
+**Field Descriptions:**
+- `name`: Unique identifier (used when agents reference skills)
+- `description`: Brief explanation of what the skill teaches
+- `version`: Semantic version for tracking changes
+- `author`: Optional attribution
 
-### 3.5 Tool Definition
+**Note**: Skills do not contain executable code (Python/shell scripts). They are purely instructional context that gets cached in the system prompt.
+
+### 3.5 Built-in Task Tool (Agent Spawning)
+
+**Purpose**: The `Task` tool is automatically included in every session and enables the model to spawn agents dynamically.
+
+**How It Works**:
+1. The model calls `Task` tool with `agent_name` and `prompt` parameters
+2. The system loads the agent definition from `agents/<agent_name>.md`
+3. A new Anthropic API request is created with:
+   - Agent's system prompt (with referenced skills loaded and cached)
+   - Agent's specified tools only
+   - Agent's model override (if not "inherit")
+   - The provided prompt as first user message
+4. Agent executes autonomously (potentially spawning sub-agents)
+5. Agent's final response is returned as the `Task` tool result
+6. Parent conversation continues with the tool result
+
+**Tool Schema** (automatically generated from available agents):
+
+```json
+{
+  "name": "Task",
+  "description": "Spawn a specialized agent to handle complex sub-tasks autonomously. Each agent has specific tools, skills, and expertise.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "agent_name": {
+        "type": "string",
+        "enum": ["code-reviewer", "test-writer", "documentation-generator"],
+        "description": "The agent to spawn. Available agents:\n- code-reviewer: Use this agent to review code for bugs, security issues...\n- test-writer: Use this agent to write comprehensive tests...\n- documentation-generator: Use this agent to create documentation..."
+      },
+      "prompt": {
+        "type": "string",
+        "description": "The task prompt to send to the agent. Be specific and provide context."
+      }
+    },
+    "required": ["agent_name", "prompt"]
+  }
+}
+```
+
+**Note**: The enum values and descriptions are dynamically populated from the project's `agents/` directory. The description concatenates all agent descriptions to help the model choose appropriately.
+
+**Example Usage in Conversation**:
+
+```json
+{
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "I'll spawn the code-reviewer agent to analyze the authentication system."
+    },
+    {
+      "type": "tool_use",
+      "id": "toolu_123",
+      "name": "Task",
+      "input": {
+        "agent_name": "code-reviewer",
+        "prompt": "Review the authentication system in src/auth.py for security vulnerabilities, focusing on session handling and password storage."
+      }
+    }
+  ]
+}
+```
+
+### 3.6 Tool Definition
 
 **JSON-based tool (tools/edit.json):**
 
@@ -403,13 +526,15 @@ def run(query, max_results=5):
         Exception: Errors are formatted per Anthropic SDK conventions
     """
     # Implementation here
-    # Tool runs in current working directory
+    # Working directory:
+    #   - Web app: Tool runs in the project's root directory (projects/<project_name>/)
+    #   - CLI: Tool runs in the directory where the CLI was invoked
     # No sandboxing - full system access
     results = perform_search(query, max_results)
     return format_results(results)
 ```
 
-### 3.6 Snippet (snippets/**/*.md)
+### 3.7 Snippet (snippets/**/*.md)
 
 Snippets are plain markdown files with optional frontmatter:
 
@@ -432,7 +557,7 @@ git log output here
 \`\`\`
 ```
 
-### 3.7 Test Configuration (tests/config.json)
+### 3.8 Test Configuration (tests/config.json)
 
 ```json
 {
@@ -500,7 +625,11 @@ git log output here
 - `tool_behavior`: `mock` (return canned results), `execute` (run real tools), or `skip` (no tools)
 - `tool_results`: Mock results for specific tools
 
-### 3.8 UI State (state.json)
+### 3.9 Global UI State (state.json)
+
+**Location**: `state.json` (at application root, NOT per-project)
+
+This file stores global UI state including the currently selected project and UI preferences:
 
 ```json
 {
@@ -534,6 +663,8 @@ git log output here
   "last_modified": "2025-11-30T15:45:00Z"
 }
 ```
+
+**Note**: This is a **global** state file that persists across all projects. It remembers which project was last open and UI preferences. Per-project state (like which files are in the project) is stored in `project.json` within each project directory.
 
 ---
 
@@ -738,34 +869,53 @@ Delete agent.
 #### GET /api/projects/<name>/skills
 List all skills.
 
+**Response:**
+```json
+{
+  "skills": [
+    {
+      "name": "web-search",
+      "description": "Search the web for current information using available tools",
+      "version": "1.0.0",
+      "author": "Your Name"
+    }
+  ]
+}
+```
+
 #### GET /api/projects/<name>/skills/<skill_name>
-Get skill definition and files.
+Get skill definition (markdown content with YAML frontmatter).
 
 **Response:**
 ```json
 {
-  "main": "main.md content",
-  "files": {
-    "search.py": "python code...",
-    "utils.sh": "bash script..."
-  }
+  "name": "web-search",
+  "description": "Search the web...",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "content": "# Web Search Skill\n\nThis skill explains..."
 }
 ```
 
 #### POST /api/projects/<name>/skills
 Create new skill.
 
+**Request:**
+```json
+{
+  "name": "web-search",
+  "description": "Search the web...",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "content": "# Web Search Skill\n\nThis skill explains..."
+}
+```
+
 #### PUT /api/projects/<name>/skills/<skill_name>
-Update skill (including adding/removing files).
+Update skill.
 
 #### DELETE /api/projects/<name>/skills/<skill_name>
 Delete skill.
-
-#### POST /api/projects/<name>/skills/<skill_name>/files
-Add file to skill.
-
-#### DELETE /api/projects/<name>/skills/<skill_name>/files/<filename>
-Remove file from skill.
 
 ### 4.5 Tool Management
 
@@ -973,7 +1123,7 @@ Complete state.json content.
 - Add message button
 
 **Auto-save:**
-Every change triggers immediate save to `current_session.json` via AJAX.
+Changes trigger debounced auto-save to `current_session.json` via AJAX (500ms delay after last change). This prevents excessive file I/O while typing and reduces risk of concurrent write conflicts.
 
 ### 5.4 Snippet Browser (Sidebar)
 
@@ -983,7 +1133,12 @@ Every change triggers immediate save to `current_session.json` via AJAX.
 - Hierarchical tree view of snippets
 - Two levels: categories and snippets
 - Each category is collapsible/expandable
-- Drag-and-drop snippet to main editor to insert
+- **Drag-and-drop snippet to main editor to insert**:
+  - **Target**: Drop zones in Session Editor for system prompts and messages
+  - **System Prompt**: Drop on "System Prompts" section → creates new system block with snippet content
+  - **Messages**: Drop on "Messages" section → creates new user message with snippet content
+  - **Existing Message**: Drop on a message widget → appends snippet to that message's text content
+  - Visual drop zone highlights appear on hover
 - Right-click context menu:
   - Edit snippet
   - Delete snippet
@@ -1053,30 +1208,40 @@ Form fields for YAML frontmatter:
 
 ### 5.7 Skill Editor Modal
 
-**Component:** Modal with dynamic tabs
+**Component:** Modal with split view (similar to Snippet Editor)
 
-**Main Tab:**
-- YAML configuration form (name, description, version, author)
-- CodeMirror editor for main.md content
-- Preview pane
+**Layout:**
+```
+┌─────────────────────────────────────────────────────┐
+│  Edit Skill                           [Save] [Cancel] │
+├──────────────────┬──────────────────────────────────┤
+│  Metadata Form   │                                   │
+│  Name: [____]    │     CodeMirror Editor             │
+│  Desc: [____]    │     (Markdown)                    │
+│  Ver:  [____]    │                                   │
+│  Auth: [____]    │  # Web Search Skill               │
+│                  │                                   │
+│                  │  This skill explains...           │
+│                  │                                   │
+├──────────────────┴──────────────────────────────────┤
+│                Markdown Preview                      │
+│                (Rendered output)                     │
+└─────────────────────────────────────────────────────┘
+```
 
-**Additional File Tabs:**
-- One tab per additional file in skill directory
-- Tab header shows filename
-- CodeMirror editor (no preview, as files may be Python/Bash)
-- Filename input (editable for new files)
-- [Save] button
-- [Delete] button (removes file and tab)
+**Features:**
+- Left panel: YAML metadata form fields
+  - Name (text input, readonly for existing skills)
+  - Description (textarea)
+  - Version (text input, e.g., "1.0.0")
+  - Author (text input, optional)
+- Top right: CodeMirror editor for markdown content
+- Bottom right: Live markdown preview (debounced)
+- [Save] button writes YAML frontmatter + content to `skills/<name>.md`
+- [Delete] button (for existing skills) - confirm dialog
+- [Cancel] button discards changes
 
-**Controls:**
-- [+ Add File] - Creates new tab with empty editor
-- [Save All] - Saves all tabs
-- [Cancel] - Close modal (confirm if unsaved changes)
-
-**Behavior:**
-- Creating new skill: [Create] button instead of [Save]
-- New file in new skill: Cancel button on new file tab only cancels that file
-- Cancel on main tab cancels everything
+**Note**: Skills are single markdown files with YAML frontmatter, no additional files or tabs needed.
 
 ### 5.8 Tool Editor Modal
 
@@ -1120,8 +1285,11 @@ Form with fields:
 - Input parameters (JSON editor matching tool schema)
 
 **For tool_result blocks:**
-- Tool use ID (links to previous tool_use)
-- Result content (text editor)
+- Tool use ID dropdown - populated from all tool_use IDs in previous messages
+  - Shows: "toolu_123 (Read - src/app.py)" for context
+  - If no tool_use found in conversation, shows warning: "No tool_use blocks found. Add a tool_use first."
+- Result content (text editor or JSON editor for structured results)
+- is_error checkbox (marks result as error)
 
 ### 5.10 Session Browser Modal
 
@@ -1150,7 +1318,110 @@ Form with fields:
 - Delete button removes backup file
 - Sorted by timestamp (newest first)
 
-### 5.11 Collapsible Widgets
+### 5.11 Package Config Modal
+
+**Component:** Modal for configuring project packaging options
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────┐
+│  Package Configuration                [Save] [Cancel] │
+├─────────────────────────────────────────────────────┤
+│                                                      │
+│  API Key Strategy:                                   │
+│  ○ CLI Argument (--api-key or env var) [Recommended]│
+│  ○ Environment File (.env in project directory)     │
+│  ○ Embedded (⚠️ Key stored in package)              │
+│  ○ Prompt User (ask on first run)                   │
+│                                                      │
+│  ─────────────────────────────────────────────────  │
+│                                                      │
+│  Dependencies:                                       │
+│  ☑ Check dependencies on CLI startup                │
+│                                                      │
+│  requirements.txt:                                   │
+│  ┌────────────────────────────────────────────────┐ │
+│  │ anthropic>=0.18.0                              │ │
+│  │ requests>=2.31.0                               │ │
+│  │ beautifulsoup4>=4.12.0                         │ │
+│  │                                                │ │
+│  └────────────────────────────────────────────────┘ │
+│                      [Edit in Full Editor]          │
+│                                                      │
+└─────────────────────────────────────────────────────┘
+```
+
+**Features:**
+- Radio buttons for API key strategy selection
+- Warning icon (⚠️) for embedded option with explanation tooltip
+- Checkbox for dependency checking enforcement
+- Preview of requirements.txt content (first 10 lines)
+- Button to open full requirements.txt editor (CodeMirror modal)
+- Save writes to project.json (package_config) and requirements.txt
+- Accessible from Project menu: "Package Settings..."
+
+**Validation**:
+- Embedded strategy shows warning dialog: "API keys will be stored in plain text in the exported package. Only use this for trusted/internal distribution."
+- requirements.txt syntax validation (basic: check for package_name==version format)
+
+### 5.12 Raw JSON Editor (Error Recovery)
+
+**Component:** Full-screen modal shown when current_session.json fails to load
+
+**Trigger**: When `SessionManager.load_session()` raises `JSONDecodeError` or validation fails
+
+**Layout:**
+```
+┌─────────────────────────────────────────────────────┐
+│  ⚠️ Session File Error                              │
+│                                       [Save] [Cancel] │
+├─────────────────────────────────────────────────────┤
+│  Error: Expecting property name enclosed in double   │
+│  quotes: line 15 column 5 (char 342)                │
+│                                                      │
+│  The session file contains invalid JSON. You can    │
+│  edit it directly below to fix the issue.           │
+│                                                      │
+├─────────────────────────────────────────────────────┤
+│                                                      │
+│  ┌────────────────────────────────────────────────┐ │
+│  │ 1  {                                           │ │
+│  │ 2    "model": "claude-sonnet-4-5-20250929",   │ │
+│  │ 3    "max_tokens": 8192,                      │ │
+│  │ 4    "system": [],                            │ │
+│  │ 5    "tools": [],                             │ │
+│  │ 6    "messages": [                            │ │
+│  │ 7      {                                      │ │
+│  │ 8        "role": "user"                       │ │
+│  │ 9        "content": [...]     <-- Error here  │ │
+│  │ 10     }                                       │ │
+│  │                                                │ │
+│  │  (CodeMirror with JSON syntax highlighting     │ │
+│  │   and error squiggles)                         │ │
+│  └────────────────────────────────────────────────┘ │
+│                                                      │
+│  [Validate JSON] button shows parse result          │
+│                                                      │
+└─────────────────────────────────────────────────────┘
+```
+
+**Features:**
+- Shows full JSON decode error message at top
+- CodeMirror editor with JSON mode and syntax highlighting
+- Line numbers
+- Error highlighting at the problematic line
+- [Validate JSON] button - tries to parse JSON and shows result (success/error)
+- [Save] button - writes raw content back to file (even if invalid)
+  - Shows confirmation if still invalid: "JSON is still invalid. Save anyway?"
+- [Cancel] button - discards changes, tries to load from backup or creates new session
+
+**Behavior:**
+- Auto-shown when project loads and session fails to parse
+- User can fix JSON manually and save
+- If user cancels, offer to restore from most recent backup
+- If no backups, create fresh default session
+
+### 5.13 Collapsible Widgets
 
 **Behavior:**
 All major sections (System, Tools, Messages) and individual items can be collapsed:
@@ -1216,7 +1487,7 @@ from pathlib import Path
 
 # Application settings
 APP_ROOT = Path(__file__).parent
-PROJECT_ROOT = APP_ROOT / 'app' / 'projects'
+PROJECT_ROOT = APP_ROOT / 'projects'  # Fixed: was 'app/projects', inconsistent with architecture
 STATIC_ROOT = APP_ROOT / 'static'
 TEMPLATE_ROOT = APP_ROOT / 'templates'
 
@@ -1227,7 +1498,7 @@ DEFAULT_MODEL = 'claude-sonnet-4-5-20250929'
 # Project settings
 MAX_SESSION_BACKUPS = 20  # Default, user-configurable per project
 AUTO_SAVE = True
-SESSION_BACKUP_FORMAT = 'current_session.json.%Y%m%d%H%M%S'
+SESSION_BACKUP_FORMAT = 'current_session.json.%Y%m%d%H%M%S%f'  # Added %f (microseconds) to prevent collisions
 
 # File extensions
 AGENT_EXT = '.md'
@@ -1300,9 +1571,53 @@ class Session(BaseModel):
     messages: List[Message] = []
 
     def validate(self):
-        """Validate session can be sent to Anthropic API."""
-        # Validation logic
-        pass
+        """
+        Validate session can be sent to Anthropic API.
+
+        Raises:
+            ValueError: If session has validation errors
+
+        Validates:
+        - Model name is valid
+        - max_tokens is positive and within limits (0 < max_tokens <= 200000)
+        - temperature is within range (0 <= temp <= 1)
+        - Messages alternate between user/assistant roles
+        - tool_use_id references in tool_result blocks match existing tool_use blocks
+        - Tool names in messages exist in the tools list
+        - System blocks have required fields
+        """
+        if self.max_tokens <= 0 or self.max_tokens > 200000:
+            raise ValueError(f"max_tokens must be between 1 and 200000, got {self.max_tokens}")
+
+        if self.temperature is not None and (self.temperature < 0 or self.temperature > 1):
+            raise ValueError(f"temperature must be between 0 and 1, got {self.temperature}")
+
+        # Validate message role alternation
+        prev_role = None
+        for i, msg in enumerate(self.messages):
+            if prev_role == msg.role and prev_role is not None:
+                # Allow consecutive user messages (tool results), but warn for consecutive assistant messages
+                if msg.role == 'assistant':
+                    raise ValueError(f"Message {i}: consecutive assistant messages not allowed")
+            prev_role = msg.role
+
+        # Collect tool_use IDs and validate tool_result references
+        tool_use_ids = set()
+        tool_names_in_session = {tool.name for tool in self.tools}
+
+        for i, msg in enumerate(self.messages):
+            for j, block in enumerate(msg.content):
+                if block.type == 'tool_use':
+                    tool_use_ids.add(block.id)
+                    if block.name not in tool_names_in_session:
+                        raise ValueError(
+                            f"Message {i}, block {j}: tool_use references unknown tool '{block.name}'"
+                        )
+                elif block.type == 'tool_result':
+                    if block.tool_use_id not in tool_use_ids:
+                        raise ValueError(
+                            f"Message {i}, block {j}: tool_result references unknown tool_use_id '{block.tool_use_id}'"
+                        )
 
 class AgentConfig(BaseModel):
     name: str
@@ -1311,16 +1626,14 @@ class AgentConfig(BaseModel):
     tools: List[str] = []
     skills: List[str] = []
     color: str = "blue"
-    permissionMode: Literal["default", "auto", "prompt"] = "default"
-    prompt: str
+    prompt: str  # The markdown content after YAML frontmatter
 
 class SkillConfig(BaseModel):
     name: str
     description: str
     version: str = "1.0.0"
     author: Optional[str] = None
-    content: str
-    additional_files: Dict[str, str] = {}
+    content: str  # The markdown content after YAML frontmatter (instructional)
 
 class TestMatch(BaseModel):
     type: Literal["regex", "contains"]
@@ -1451,21 +1764,33 @@ class SessionManager:
         self.session_file = project_path / 'current_session.json'
 
     def load_session(self) -> Session:
-        """Load current session."""
+        """
+        Load current session.
+
+        Returns:
+            Session object if successfully loaded and parsed
+            None if JSON decode fails (caller should show raw JSON editor)
+
+        Raises:
+            JSONDecodeError: If file contains invalid JSON (caller handles)
+        """
         if not self.session_file.exists():
             return Session(model="claude-sonnet-4-5-20250929", max_tokens=8192)
 
         with open(self.session_file, 'r') as f:
-            data = json.load(f)
+            data = json.load(f)  # May raise JSONDecodeError
 
-        return Session(**data)
+        return Session(**data)  # May raise ValidationError
 
     def save_session(self, session: Session) -> bool:
-        """Save session (auto-save on every change)."""
-        session.validate()  # Ensure it's valid
+        """
+        Save session (auto-save on every change).
 
-        with open(self.session_file, 'w') as f:
-            json.dump(session.dict(), f, indent=2)
+        Note: Does NOT validate before saving - saving should never fail.
+        Validation is for informational purposes only (warnings in UI).
+        """
+        # Use the file locking mechanism from Section 7.1
+        save_json(self.session_file, session.dict())
 
         return True
 
@@ -1474,7 +1799,7 @@ class SessionManager:
         if not self.session_file.exists():
             return None
 
-        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')  # Includes microseconds to prevent collisions
         backup_file = self.project_path / f'current_session.json.{timestamp}'
 
         shutil.copy2(self.session_file, backup_file)
@@ -1640,9 +1965,18 @@ class ToolManager:
 
     def _load_python_module(self, tool_name: str, tool_path: Path):
         """Dynamically load Python module."""
-        spec = importlib.util.spec_from_file_location(tool_name, tool_path)
+        # Use unique module name with path hash to avoid conflicts with built-in modules
+        # and allow reloading when tool files are modified
+        import hashlib
+        module_name = f"anthropide_tool_{tool_name}_{hashlib.md5(str(tool_path).encode()).hexdigest()[:8]}"
+
+        # Remove from cache if already loaded (allows hot-reloading)
+        if module_name in sys.modules:
+            del sys.modules[module_name]
+
+        spec = importlib.util.spec_from_file_location(module_name, tool_path)
         module = importlib.util.module_from_spec(spec)
-        sys.modules[tool_name] = module
+        sys.modules[module_name] = module
         spec.loader.exec_module(module)
         return module
 ```
@@ -2112,6 +2446,47 @@ from .runner import ProjectRunner
 from .plugin_loader import ToolPluginLoader
 from .history import ConversationHistory
 
+def check_dependencies(requirements_file: Path) -> bool:
+    """
+    Check if all dependencies in requirements.txt are installed.
+
+    Returns True if all dependencies satisfied, False otherwise.
+    Prints detailed error messages for missing packages.
+    """
+    if not requirements_file.exists():
+        return True  # No requirements file, assume OK
+
+    missing = []
+    with open(requirements_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+
+            # Parse package name (before ==, >=, <=, etc.)
+            import re
+            match = re.match(r'^([a-zA-Z0-9_-]+)', line)
+            if not match:
+                continue
+
+            package = match.group(1)
+
+            # Try to import
+            try:
+                __import__(package.replace('-', '_'))
+            except ImportError:
+                missing.append(line)
+
+    if missing:
+        print("ERROR: Missing required dependencies:", file=sys.stderr)
+        for dep in missing:
+            print(f"  - {dep}", file=sys.stderr)
+        print("\nInstall with:", file=sys.stderr)
+        print(f"  pip install -r {requirements_file}", file=sys.stderr)
+        return False
+
+    return True
+
 def main():
     parser = argparse.ArgumentParser(
         description='Run AnthropIDE packaged projects',
@@ -2129,14 +2504,9 @@ def main():
     )
 
     parser.add_argument(
-        '--agent',
-        help='Specific agent to run (default: uses project default)',
-    )
-
-    parser.add_argument(
         '--input',
         '-i',
-        help='Input message to send',
+        help='Input message to send (if omitted, enters interactive mode)',
     )
 
     parser.add_argument(
@@ -2152,6 +2522,12 @@ def main():
     )
 
     parser.add_argument(
+        '--skip-dependency-check',
+        action='store_true',
+        help='Skip checking requirements.txt dependencies',
+    )
+
+    parser.add_argument(
         '--verbose',
         '-v',
         action='store_true',
@@ -2162,6 +2538,14 @@ def main():
 
     # Load project
     runner = ProjectRunner(args.project_path)
+
+    # Check dependencies (unless skipped or project config disables)
+    if not args.skip_dependency_check:
+        project_metadata = runner.load_project_metadata()
+        if project_metadata.get('package_config', {}).get('dependencies_checked', True):
+            requirements_file = runner.project_path / 'requirements.txt'
+            if not check_dependencies(requirements_file):
+                sys.exit(1)
 
     # Load tool plugins
     tool_loader = ToolPluginLoader(runner.project_path / 'tools')
@@ -2191,7 +2575,6 @@ def main():
                 tools=tools,
                 input_message=args.input,
                 history=history,
-                agent=args.agent,
                 verbose=args.verbose,
             )
 
@@ -2216,6 +2599,7 @@ if __name__ == '__main__':
 """Project execution engine."""
 
 import json
+import sys
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import anthropic
@@ -2266,10 +2650,15 @@ class ProjectRunner:
         tools: List[Dict],
         input_message: Optional[str],
         history: ConversationHistory,
-        agent: Optional[str] = None,
         verbose: bool = False,
     ):
-        """Execute the project with streaming output."""
+        """
+        Execute the project with streaming output.
+
+        Agents are spawned automatically when the model calls the Task tool.
+        The CLI doesn't need an --agent flag - it loads current_session.json as-is
+        and begins execution.
+        """
 
         # Add input message if provided
         if input_message:
@@ -2278,66 +2667,78 @@ class ProjectRunner:
                 'content': [{'type': 'text', 'text': input_message}]
             })
 
-        # Prepare request
-        request = {
-            'model': self.session.model,
-            'max_tokens': self.session.max_tokens,
-            'system': [block.dict() for block in self.session.system],
-            'tools': tools,
-            'messages': [msg.dict() for msg in self.session.messages],
-        }
+        # Use iterative loop instead of recursion to avoid stack overflow
+        # with long multi-turn tool-calling conversations
+        max_turns = 100  # Safety limit
+        turn_count = 0
 
-        # Stream response
-        print("Assistant: ", end='', flush=True)
+        while turn_count < max_turns:
+            turn_count += 1
 
-        with client.messages.stream(**request) as stream:
-            response_text = ''
-            tool_uses = []
+            # Prepare request
+            request = {
+                'model': self.session.model,
+                'max_tokens': self.session.max_tokens,
+                'system': [block.dict() for block in self.session.system],
+                'tools': tools,
+                'messages': [msg.dict() for msg in self.session.messages],
+            }
 
-            for event in stream:
-                if event.type == 'content_block_delta':
-                    if event.delta.type == 'text_delta':
-                        text = event.delta.text
-                        print(text, end='', flush=True)
-                        response_text += text
+            # Stream response
+            if turn_count == 1:
+                print("Assistant: ", end='', flush=True)
 
-                elif event.type == 'content_block_start':
-                    if event.content_block.type == 'tool_use':
-                        tool_uses.append(event.content_block)
+            with client.messages.stream(**request) as stream:
+                response_text = ''
+                tool_uses = []
 
-            print()  # Newline after response
+                for event in stream:
+                    if event.type == 'content_block_delta':
+                        if event.delta.type == 'text_delta':
+                            text = event.delta.text
+                            print(text, end='', flush=True)
+                            response_text += text
 
-            # Handle tool calls
-            if tool_uses:
-                tool_results = self.execute_tools(tool_uses, verbose)
+                    elif event.type == 'content_block_start':
+                        if event.content_block.type == 'tool_use':
+                            tool_uses.append(event.content_block)
 
-                # Add assistant message with tool uses
-                self.session.messages.append({
-                    'role': 'assistant',
-                    'content': [
-                        {'type': 'text', 'text': response_text},
-                        *[tool.dict() for tool in tool_uses]
-                    ]
-                })
+                print()  # Newline after response
 
-                # Add tool results
-                self.session.messages.append({
-                    'role': 'user',
-                    'content': tool_results
-                })
+                # Handle tool calls
+                if tool_uses:
+                    tool_results = self.execute_tools(tool_uses, verbose)
 
-                # Continue conversation
-                self.run(client, tools, None, history, agent, verbose)
+                    # Add assistant message with tool uses
+                    self.session.messages.append({
+                        'role': 'assistant',
+                        'content': [
+                            {'type': 'text', 'text': response_text},
+                            *[tool.dict() for tool in tool_uses]
+                        ]
+                    })
 
-            else:
-                # Conversation complete
-                self.session.messages.append({
-                    'role': 'assistant',
-                    'content': [{'type': 'text', 'text': response_text}]
-                })
+                    # Add tool results
+                    self.session.messages.append({
+                        'role': 'user',
+                        'content': tool_results
+                    })
 
-                # Save to history
-                history.save(self.session)
+                    # Continue loop for next turn
+
+                else:
+                    # Conversation complete
+                    self.session.messages.append({
+                        'role': 'assistant',
+                        'content': [{'type': 'text', 'text': response_text}]
+                    })
+
+                    # Save to history
+                    history.save(self.session)
+                    break  # Exit loop
+
+        if turn_count >= max_turns:
+            print(f"\nWarning: Reached maximum turn limit ({max_turns})", file=sys.stderr)
 
     def execute_tools(self, tool_uses: List, verbose: bool) -> List[Dict]:
         """Execute tool calls and return results."""
@@ -2378,22 +2779,84 @@ class ProjectRunner:
 
 ## 7. Security Considerations
 
-### 7.1 Custom Tool Execution
+### 7.1 File Concurrency & Locking
+**Problem**: Multiple operations can write to the same JSON file simultaneously:
+- Auto-save from frontend (debounced)
+- Manual save operations
+- Session backup creation
+- External editor modifications
+
+**Solution**: Implement file locking for all JSON write operations:
+
+```python
+import fcntl
+import json
+from pathlib import Path
+from typing import Any
+from contextlib import contextmanager
+
+@contextmanager
+def locked_json_write(file_path: Path):
+    """Context manager for locked JSON file writes."""
+    # Open file for writing
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Use a lock file to avoid race conditions
+    lock_file = file_path.with_suffix(file_path.suffix + '.lock')
+
+    with open(lock_file, 'w') as lock_fd:
+        # Acquire exclusive lock
+        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX)
+
+        try:
+            # Write to temp file first
+            temp_file = file_path.with_suffix(file_path.suffix + '.tmp')
+
+            yield temp_file  # Caller writes to temp_file
+
+            # Atomic rename
+            temp_file.rename(file_path)
+
+        finally:
+            # Release lock
+            fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+            lock_file.unlink(missing_ok=True)
+
+def save_json(file_path: Path, data: Any):
+    """Thread-safe JSON save with locking."""
+    with locked_json_write(file_path) as temp_file:
+        with open(temp_file, 'w') as f:
+            json.dump(data, f, indent=2)
+```
+
+**Usage in SessionManager:**
+```python
+def save_session(self, session: Session) -> bool:
+    """Save session with file locking."""
+    session.validate()
+
+    save_json(self.session_file, session.dict())
+    return True
+```
+
+**Note**: On Windows, use different locking mechanism (msvcrt module).
+
+### 7.2 Custom Tool Execution
 - **No sandboxing** - tools run with full system access
 - Users are responsible for auditing custom tools
 - Clear documentation warning about security implications
 
-### 7.2 API Key Management
+### 7.3 API Key Management
 - Never commit API keys to version control
 - Support multiple key sources (env var, prompt, embedded with caution)
 - Embedded keys in packaged projects should be clearly marked as optional
 
-### 7.3 File System Access
+### 7.4 File System Access
 - All file operations are scoped to project directories
 - No path traversal validation needed (trusted user environment)
 - Backup system prevents accidental data loss
 
-### 7.4 Input Validation
+### 7.5 Input Validation
 - Validate all JSON structures against schemas
 - Sanitize project names (alphanumeric + hyphens/underscores only)
 - Validate file uploads (zip files only for project import)
@@ -2524,12 +2987,13 @@ When creating a new project, ensure these files/directories exist:
 - [ ] `tests/` directory
 - [ ] `tests/config.json` (empty: `{"tests": []}`)
 - [ ] `current_session.json` (default session)
-- [ ] `state.json` (default UI state)
 - [ ] `project.json` (project metadata)
+
+**Note**: `state.json` is a global file at application root, NOT per-project.
 
 ### 11.3 Default Templates
 
-**Default Session:**
+**Default Session (per-project):**
 ```json
 {
   "model": "claude-sonnet-4-5-20250929",
@@ -2540,7 +3004,22 @@ When creating a new project, ensure these files/directories exist:
 }
 ```
 
-**Default State:**
+**Default Project Metadata (per-project):**
+```json
+{
+  "name": "project_name",
+  "description": "",
+  "created": "2025-11-30T00:00:00Z",
+  "modified": "2025-11-30T00:00:00Z",
+  "settings": {
+    "max_session_backups": 20,
+    "auto_save": true,
+    "default_model": "claude-sonnet-4-5-20250929"
+  }
+}
+```
+
+**Default Global State (application root):**
 ```json
 {
   "version": "1.0",
@@ -2558,15 +3037,55 @@ When creating a new project, ensure these files/directories exist:
 
 ---
 
-## 12. Glossary
+## 12. Design Clarifications & Resolutions
 
-- **Agent**: A reusable AI configuration with specific tools, skills, and prompts
-- **Skill**: Extended functionality accessible to agents (like plugins)
-- **Tool**: Functions callable by the AI model (following Anthropic SDK conventions)
-- **Snippet**: Reusable text/context blocks for building prompts
-- **Session**: Complete API request configuration (model, system, tools, messages)
-- **Project**: Container for all related agents, tools, skills, snippets, and sessions
-- **Simulation**: Mock API responses for testing without consuming tokens
+This section documents design questions that were raised during spec review and their resolutions.
+
+### 12.1 Agent Execution Model - **RESOLVED**
+
+**Clarified**: Agents work like Claude Code's Task tool. They are spawned during execution via a built-in `Task` tool that the model calls. See Section 3.5 for full specification.
+
+### 12.2 Skill Execution Model - **RESOLVED**
+
+**Clarified**: Skills are instructional markdown files (not executable code) that get loaded into the agent's system prompt with caching. They teach the model how to use tools to accomplish complex workflows. See updated Section 3.4.
+
+### 12.3 Permission Mode - **RESOLVED**
+
+**Clarified**: Removed `permissionMode` entirely. All tools execute with full permissions (no sandboxing). This is a power-user tool.
+
+### 12.4 Test Tool Execution - **CLARIFIED**
+
+**Resolution**: `tool_behavior: "execute"` is intentionally for manual testing only. Users are responsible for side effects. This allows verification that tools return reasonable data. Not for automated testing.
+
+### 12.5 Tool Result ID Linking - **RESOLVED**
+
+**Clarified**: Message Editor shows dropdown of available tool_use IDs from previous messages, with context (e.g., "toolu_123 (Read - src/app.py)"). See updated Section 5.9.
+
+### 12.6 Validation Strategy - **RESOLVED**
+
+**Clarified**: Saving never fails. Validation is informational only. If JSON decode fails, show Raw JSON Editor (Section 5.12) where user can fix manually. Invalid sessions can always be saved.
+
+### 12.7 Package Dependencies - **RESOLVED**
+
+**Clarified**: Added `requirements.txt` support and Package Config feature (Section 5.11). CLI checks dependencies on startup and reports missing packages. See updated Section 6.3.1.
+
+### 12.8 CLI Agent Flag - **RESOLVED**
+
+**Clarified**: Removed `--agent` flag entirely. CLI loads `current_session.json` as-is. Agents are spawned dynamically via Task tool during execution.
+
+---
+
+## 13. Glossary
+
+- **Agent**: A specialized AI configuration spawned via the Task tool during execution. Has specific tools, skills, and system prompt. Works like Claude Code's subagents.
+- **Skill**: Instructional markdown file loaded into an agent's system prompt (with caching). Teaches the model how to use tools to accomplish complex workflows. Not executable code.
+- **Tool**: Functions callable by the AI model following Anthropic SDK conventions. Can be JSON schemas (non-executable) or Python implementations.
+- **Task Tool**: Built-in tool (Section 3.5) that enables spawning agents dynamically. Automatically included in every session.
+- **Snippet**: Reusable markdown text block that can be dragged into system prompts or messages
+- **Session**: Complete Anthropic API request (model, system, tools, messages) stored as current_session.json
+- **Project**: Container for all related agents, tools, skills, snippets, sessions, and configuration
+- **Package Config**: Settings for how a project behaves when exported/distributed (API key strategy, dependencies)
+- **Simulation**: Mock API responses for testing without consuming tokens (based on tests/config.json)
 
 ---
 

@@ -1,0 +1,29 @@
+# AnthropIDE Dependencies
+
+# Web Framework
+bottle>=0.12.25
+
+# Data Validation and Serialization
+pydantic>=2.0.0
+
+# Anthropic API Client
+anthropic>=0.18.0
+
+# Testing Framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Additional Dependencies for Production Use
+# (These may be added as development progresses)
+
+# JSON Schema Validation
+jsonschema>=4.17.0
+
+# Markdown Processing (for preview and validation)
+markdown>=3.4.0
+
+# File Type Detection
+python-magic>=0.4.27
+
+# Date/Time Utilities
+python-dateutil>=2.8.2
