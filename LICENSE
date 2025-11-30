@@ -1,0 +1,175 @@
+ANTHROPIDE SOFTWARE LICENSE
+
+Copyright (c) 2025 Lycanthrope & Noir Inc.
+
+GRANT OF LICENSE
+
+Permission is hereby granted, free of charge, to any natural person obtaining
+a copy of this software and associated documentation files (the "Software"),
+to use, run, and modify the Software subject to the following conditions.
+Companies, corporations, partnerships, LLCs, and other legal entities require
+a separate written license agreement.
+
+1. PERMITTED USE FOR INDIVIDUALS
+
+   As an individual natural person, you may:
+   a) Run any version of the Software distributed through official channels
+      for academic, experimental, non-commercial, and personal commercial
+      purposes.
+   b) Use the Software for personal commercial activities including but not
+      limited to consulting, freelancing, sole proprietorships, and private
+      commercial engagements, provided you are acting as an individual natural
+      person and not on behalf of or as a company, corporation, partnership,
+      LLC, or other legal entity.
+   c) Modify the Software for any permitted use under this license, including
+      personal commercial activities.
+   d) Fork the repository for the purposes described above, provided all forks
+      and derivatives remain subject to the terms of this license.
+
+2. INDIVIDUAL COMMERCIAL USE RESTRICTIONS
+
+   When using the Software for personal commercial activities, you:
+   a) May use the functionality of the Software for any lawful personal commercial
+      activity as an individual natural person.
+   b) May NOT grant licenses, sublicenses, or permissions to any other person,
+      company, or entity at any time.
+   c) May NOT act as an intermediary or reseller of the Software or its
+      functionality.
+   d) Must comply with all applicable laws in your jurisdiction of use.
+
+3. PROHIBITED USES
+
+   You may NOT:
+   a) Repackage, sell, distribute, sublicense, or rebrand the Software or any
+      derivative works without explicit written contractual permission from
+      Lycanthrope & Noir Inc.
+   b) Use the Software on behalf of, or provide access to, any company,
+      corporation, partnership, LLC, or other legal entity without a separate
+      license agreement.
+   c) Grant any rights or licenses to others under this agreement.
+   d) Remove or alter any copyright, trademark, or attribution notices contained
+      within the Software.
+
+4. COMPANY AND CORPORATE USE
+
+   All companies, corporations, partnerships, LLCs, and other legal entities
+   must obtain a separate written license agreement from Lycanthrope & Noir Inc.
+   prior to any use of the Software.
+
+5. DERIVATIVE WORKS AND COPYRIGHT
+
+   All forks, modifications, and derivative works of the Software remain subject
+   to the terms and conditions of this license.
+
+   Lycanthrope & Noir Inc. retains copyright only in:
+   a) The original source code of the Software as distributed.
+   b) Source code in derivative works that remains substantially the same as
+      the original, including code that has been trivially modified through
+      cosmetic changes such as renaming, reformatting, or superficial
+      refactoring that does not materially alter the logic, structure, or
+      purpose of the original code.
+
+   Authors of derivative works retain copyright in their original contributions,
+   including:
+   a) Genuinely new code, features, and functionality they create.
+   b) Substantial modifications that materially alter the logic, structure, or
+      purpose of the original code.
+
+   Notwithstanding the above, all derivative works (including both original
+   contributions by the author and code derived from the Software) must be
+   distributed under the terms of this license and remain subject to all of its
+   conditions and restrictions.
+
+6. CORPORATE LICENSING
+
+   Companies, corporations, and other legal entities seeking to license the
+   Software should contact Lycanthrope & Noir Inc. regarding commercial licensing
+   arrangements.
+
+7. DISCLAIMER OF WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+   LYCANTHROPE & NOIR INC. BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+   IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+8. LIMITATION OF LIABILITY AND INDEMNIFICATION
+
+   IN NO EVENT SHALL LYCANTHROPE & NOIR INC. BE LIABLE FOR ANY INDIRECT,
+   INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR
+   IN CONNECTION WITH THE SOFTWARE OR THIS LICENSE.
+
+   You agree to indemnify, defend, and hold harmless Lycanthrope & Noir Inc.,
+   its officers, directors, employees, and agents from and against any claims,
+   damages, obligations, losses, liabilities, costs, and expenses (including
+   reasonable attorney's fees) arising from:
+
+   a) Your breach of any terms of this license.
+   b) Your violation of any third-party intellectual property rights through
+      unauthorized distribution, sublicensing, or modification of the Software
+      in violation of this license.
+
+9. NO CONTROL OR MONITORING
+
+   Lycanthrope & Noir Inc. explicitly states that:
+
+   a) This is a non-networked application with no central storage.
+   b) We collect no usage metrics, telemetry, or data on users.
+   c) We have no control over, and do not intend to control, the individual
+      uses of the Software by licensed users.
+   d) We have no capability of knowing or monitoring how licensed users engage
+      with the Software.
+   e) Users are solely responsible for their use of the Software and compliance
+      with applicable laws and regulations.
+
+10. TERMINATION
+
+    This license is effective until terminated. Your rights under this license
+    will terminate automatically if you fail to comply with any material term
+    of this license and fail to cure such breach within thirty (30) days of
+    becoming aware of the breach. Material breaches include, but are not limited
+    to, unauthorized distribution, sublicensing, or commercial use by legal
+    entities without proper licensing. Upon termination, you must immediately
+    cease all use of the Software and destroy all copies in your possession or
+    control.
+
+11. GOVERNING LAW AND VENUE
+
+    This license shall be governed by and construed in accordance with the laws
+    of the State of Florida and applicable federal laws of the United States,
+    without regard to conflict of law provisions. Any legal action or proceeding
+    arising under this license shall be brought exclusively in the state or
+    federal courts located in Florida, and the parties hereby consent to the
+    personal jurisdiction and venue of such courts.
+
+12. ENTIRE AGREEMENT
+
+    This license constitutes the entire agreement between you and Lycanthrope &
+    Noir Inc. regarding the Software and supersedes all prior or contemporaneous
+    understandings regarding such subject matter.
+
+13. SEVERABILITY
+
+    If any provision of this license is held to be unenforceable or invalid by
+    a court of competent jurisdiction, such provision shall be modified to the
+    minimum extent necessary to make it enforceable or, if that is not possible,
+    such provision shall be severed from this license. The remaining provisions
+    of this license shall remain in full force and effect.
+
+14. WAIVER
+
+    The failure of Lycanthrope & Noir Inc. to enforce any right or provision
+    of this license shall not constitute a waiver of such right or provision.
+    No waiver of any term of this license shall be deemed a further or continuing
+    waiver of such term or any other term.
+
+15. ASSIGNMENT
+
+    You may not assign, transfer, or sublicense your rights or obligations under
+    this license without the prior written consent of Lycanthrope & Noir Inc.
+    Lycanthrope & Noir Inc. may assign this license without restriction. Any
+    attempted assignment in violation of this section shall be void.
+
+For corporate licensing inquiries, please contact Lycanthrope & Noir Inc.
