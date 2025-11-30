@@ -1,6 +1,48 @@
 # AnthropIDE
 
-A web-based context/prompt engineering platform for designing, testing, and packaging sophisticated AI prompts as distributable products.
+AnthropIDE is a web-based development environment for creating, testing, and distributing AI prompts as complete products.
+
+The Core Problem It Solves
+
+When building sophisticated AI workflows with Claude, you typically need to:
+- Craft complex system prompts
+- Define custom tools for the AI to use
+- Create reusable context snippets
+- Test everything by consuming API tokens
+- Share your work as code that others need to integrate
+
+AnthropIDE addresses all of these challenges in one integrated platform.
+
+What It Does
+
+Design Phase:
+- Edit every aspect of Anthropic API requests with a visual interface
+- Build system prompts with collapsible sections and drag-and-drop snippets
+- Define custom tools (Python implementations or JSON schemas)
+- Create "skills" - instructional guides that teach Claude how to accomplish complex workflows
+- Create "agents" - specialized Claude configurations with specific tools/skills that can be spawned during execution
+
+Test Phase:
+- Simulate API responses without consuming tokens using a test configuration system
+- Validate that your prompts produce expected behavior through deterministic testing
+- Debug multi-turn conversations with tool calling
+
+Deploy Phase:
+- Package everything as a standalone CLI application in a single zip file
+- Distribute your AI assistant to users who can run it from the command line
+- Include all tools, prompts, and configurations in a portable format
+
+Real-World Use Cases
+
+1. Prompt Engineers: Build reusable AI workflows and package them for clients
+2. Companies: Create internal AI tooling with custom tools/skills for their domain
+3. Developers: Package AI agents as products that customers can run locally
+4. Teams: Test and validate complex prompts before deploying to production
+
+The Key Innovation
+
+Rather than writing code to call the Anthropic API, you use a visual IDE to compose the entire request structure, then export it as a ready-to-run CLI
+application. Your "prompts as products" can be distributed like any other software package.
 
 ## Overview
 
