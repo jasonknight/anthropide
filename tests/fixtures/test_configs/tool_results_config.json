@@ -1,0 +1,33 @@
+{
+  "tests": [
+    {
+      "name": "tool_test",
+      "sequence": [
+        {
+          "match": {
+            "type": "contains",
+            "path": "messages.0.content",
+            "value": "use tool"
+          },
+          "response": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "tool_123",
+                "name": "test_tool",
+                "input": {
+                  "param": "value"
+                }
+              }
+            ]
+          },
+          "tool_behavior": "mock",
+          "tool_results": {
+            "tool_123": "Tool executed successfully"
+          }
+        }
+      ]
+    }
+  ]
+}

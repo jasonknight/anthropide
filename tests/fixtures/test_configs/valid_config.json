@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "name": "simple_test",
+      "sequence": [
+        {
+          "match": {
+            "type": "contains",
+            "path": "messages.0.content",
+            "value": "hello"
+          },
+          "response": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Hello! How can I help you?"
+              }
+            ]
+          },
+          "tool_behavior": "mock"
+        }
+      ]
+    },
+    {
+      "name": "regex_test",
+      "sequence": [
+        {
+          "match": {
+            "type": "regex",
+            "path": "messages.0.content",
+            "pattern": "create.*file"
+          },
+          "response": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "I'll create a file for you."
+              }
+            ]
+          },
+          "tool_behavior": "execute"
+        }
+      ]
+    }
+  ]
+}

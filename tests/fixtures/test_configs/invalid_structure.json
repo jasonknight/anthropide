@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "name": "invalid_test",
+      "sequence": [
+        {
+          "match": {
+            "type": "invalid_type",
+            "path": "messages.0.content"
+          },
+          "response": {
+            "role": "assistant",
+            "content": []
+          }
+        }
+      ]
+    }
+  ]
+}

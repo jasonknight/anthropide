@@ -8,6 +8,7 @@ project and session management. It provides the backend for the AnthropIDE UI.
 import json
 import logging
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -39,6 +40,14 @@ from lib.state_manager import (
     StateManagerError,
     StateLoadError,
     StateSaveError,
+)
+from lib.test_config_manager import TestConfigManager
+from lib.test_simulator import (
+    TestSimulator,
+    SimulationError,
+    TestNotFoundError,
+    NoMatchError,
+    ToolExecutionError,
 )
 
 # Set up logging
@@ -75,6 +84,7 @@ def enable_cors():
 @app.route('/api/projects/<name>/session/backups', method='OPTIONS')
 @app.route('/api/projects/<name>/session/restore', method='OPTIONS')
 @app.route('/api/projects/<name>/session/backups/<filename>', method='OPTIONS')
+@app.route('/api/projects/<name>/simulate', method='OPTIONS')
 @app.route('/api/state', method='OPTIONS')
 def handle_options(**kwargs):
     """Handle OPTIONS requests for CORS preflight."""
@@ -796,6 +806,352 @@ def delete_backup(name: str, filename: str):
             'success': False,
             'error': 'Internal server error',
         }
+
+
+# ============================================================================
+# Test Simulation API Endpoints (Section 6.4)
+# ============================================================================
+
+@app.route('/api/projects/<name>/simulate', method='POST')
+def simulate_session(name: str):
+    """
+    Simulate session execution using test configuration.
+
+    This endpoint simulates API requests without making real calls to the
+    Anthropic API. It uses test configurations from tests/config.json to
+    match requests and return canned responses.
+
+    Args:
+        name: Project name
+
+    Request Body:
+        {
+            "test_name": "optional_test_name",  # Optional: specific test to run
+            "stream": false,                     # Optional: simulate streaming (default: false)
+            "session": {...}                     # Required: Session object to simulate
+        }
+
+    Returns:
+        JSON response with simulated API response
+
+    Response (non-streaming):
+        {
+            "id": "sim_response",
+            "type": "message",
+            "role": "assistant",
+            "content": [...],
+            "model": "claude-sonnet-4-5-20250929",
+            "stop_reason": "end_turn",
+            "stop_sequence": null,
+            "usage": {
+                "input_tokens": 0,
+                "output_tokens": 0
+            }
+        }
+
+    Response (streaming):
+        {
+            "chunks": [
+                {"type": "message_start", "message": {...}},
+                {"type": "content_block_start", "index": 0, "content_block": {...}},
+                {"type": "content_block_delta", "index": 0, "delta": {...}},
+                ...
+            ]
+        }
+
+    Error Responses:
+        404: Project not found
+        400: Invalid request data, no test config, test not found, no matching test
+        500: Simulation error, internal server error
+    """
+    try:
+        # Verify project exists
+        project_path = config.PROJECT_ROOT / name
+        if not project_path.exists():
+            response.status = 404
+            return {
+                'success': False,
+                'error': f'Project "{name}" does not exist',
+            }
+
+        # Parse request body
+        try:
+            data = request.json
+        except Exception as e:
+            logger.warning(f"Invalid JSON in request: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Invalid JSON in request body',
+            }
+
+        if not data:
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Request body is required',
+            }
+
+        # Extract parameters
+        test_name = data.get('test_name')
+        stream = data.get('stream', False)
+        session_data = data.get('session')
+
+        # Validate session data
+        if not session_data:
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Session data is required',
+            }
+
+        # Validate and create Session object
+        try:
+            session = Session(**session_data)
+        except Exception as e:
+            logger.warning(f"Invalid session data: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': f'Invalid session data: {str(e)}',
+            }
+
+        # Load test configuration
+        try:
+            test_config_manager = TestConfigManager(project_path)
+            test_config = test_config_manager.load_test_config()
+        except FileNotFoundError as e:
+            logger.error(f"Test configuration not found: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': f'Test configuration not found: {str(e)}',
+            }
+        except ValueError as e:
+            logger.error(f"Invalid test configuration: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': f'Invalid test configuration: {str(e)}',
+            }
+
+        # Check if test config is empty
+        if not test_config.tests:
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'No tests found in test configuration',
+            }
+
+        # Determine which test to use
+        if test_name:
+            # Use specified test
+            logger.info(f"Using specified test: {test_name}")
+            selected_test_name = test_name
+        else:
+            # Auto-match: use first test
+            selected_test_name = test_config.tests[0].name
+            logger.info(f"Auto-matching to first test: {selected_test_name}")
+
+        # Verify test exists
+        available_tests = [t.name for t in test_config.tests]
+        if selected_test_name not in available_tests:
+            response.status = 400
+            return {
+                'success': False,
+                'error': f'Test "{selected_test_name}" not found. Available tests: {", ".join(available_tests)}',
+            }
+
+        # Create simulator (no tool executor for now, will be added in Plan 04)
+        simulator = TestSimulator(
+            test_config=test_config,
+            tool_executor=None,
+        )
+
+        # Run simulation
+        try:
+            simulated_response = simulator.simulate(
+                session=session,
+                test_name=selected_test_name,
+            )
+        except TestNotFoundError as e:
+            logger.error(f"Test not found during simulation: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': str(e),
+            }
+        except NoMatchError as e:
+            logger.error(f"No matching sequence found: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': str(e),
+            }
+        except ToolExecutionError as e:
+            logger.error(f"Tool execution error: {e}")
+            response.status = 500
+            return {
+                'success': False,
+                'error': f'Tool execution error: {str(e)}',
+            }
+        except SimulationError as e:
+            logger.error(f"Simulation error: {e}")
+            response.status = 500
+            return {
+                'success': False,
+                'error': f'Simulation error: {str(e)}',
+            }
+
+        # Handle streaming vs non-streaming response
+        if stream:
+            # Simulate streaming with delays
+            logger.info("Simulating streaming response")
+            streaming_response = _simulate_streaming(simulated_response)
+            return streaming_response
+        else:
+            # Return complete response
+            logger.info(f"Simulation complete for test: {selected_test_name}")
+            return simulated_response
+
+    except Exception as e:
+        logger.exception(f"Unexpected error in simulation: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+def _simulate_streaming(api_response: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert a complete API response into a simulated streaming format.
+
+    This helper function breaks down a complete API response into streaming
+    chunks that mimic the Anthropic API streaming format. Each content block
+    is split into smaller delta chunks with simulated delays.
+
+    Args:
+        api_response: Complete API response from simulator
+
+    Returns:
+        Dictionary with 'chunks' list containing streaming events
+    """
+    chunks = []
+
+    # Message start event
+    chunks.append({
+        'type': 'message_start',
+        'message': {
+            'id': api_response.get('id', 'sim_response'),
+            'type': 'message',
+            'role': api_response.get('role', 'assistant'),
+            'content': [],
+            'model': api_response.get('model'),
+            'stop_reason': None,
+            'stop_sequence': None,
+            'usage': {'input_tokens': 0, 'output_tokens': 0},
+        },
+    })
+
+    # Content block events
+    content = api_response.get('content', [])
+    for index, block in enumerate(content):
+        block_type = block.get('type') if isinstance(block, dict) else block.type
+
+        if block_type == 'text':
+            # Text block with deltas
+            text_content = block.get('text') if isinstance(block, dict) else block.text
+
+            # Start text block
+            chunks.append({
+                'type': 'content_block_start',
+                'index': index,
+                'content_block': {
+                    'type': 'text',
+                    'text': '',
+                },
+            })
+
+            # Split text into chunks (simulate character-by-character streaming)
+            # For simplicity, split into words
+            if text_content:
+                words = text_content.split(' ')
+                for i, word in enumerate(words):
+                    delta_text = word
+                    if i < len(words) - 1:
+                        delta_text += ' '
+
+                    chunks.append({
+                        'type': 'content_block_delta',
+                        'index': index,
+                        'delta': {
+                            'type': 'text_delta',
+                            'text': delta_text,
+                        },
+                    })
+
+            # End text block
+            chunks.append({
+                'type': 'content_block_stop',
+                'index': index,
+            })
+
+        elif block_type == 'tool_use':
+            # Tool use block
+            tool_data = block if isinstance(block, dict) else block.model_dump()
+
+            chunks.append({
+                'type': 'content_block_start',
+                'index': index,
+                'content_block': {
+                    'type': 'tool_use',
+                    'id': tool_data.get('id'),
+                    'name': tool_data.get('name'),
+                    'input': {},
+                },
+            })
+
+            # Tool input deltas (send complete input as one delta for simplicity)
+            tool_input = tool_data.get('input', {})
+            if tool_input:
+                chunks.append({
+                    'type': 'content_block_delta',
+                    'index': index,
+                    'delta': {
+                        'type': 'input_json_delta',
+                        'partial_json': json.dumps(tool_input),
+                    },
+                })
+
+            chunks.append({
+                'type': 'content_block_stop',
+                'index': index,
+            })
+
+    # Message delta with stop reason
+    chunks.append({
+        'type': 'message_delta',
+        'delta': {
+            'stop_reason': api_response.get('stop_reason', 'end_turn'),
+            'stop_sequence': api_response.get('stop_sequence'),
+        },
+        'usage': {
+            'output_tokens': 0,
+        },
+    })
+
+    # Message stop event
+    chunks.append({
+        'type': 'message_stop',
+    })
+
+    logger.debug(f"Generated {len(chunks)} streaming chunks")
+
+    return {
+        'chunks': chunks,
+        'simulated': True,
+    }
 
 
 # ============================================================================

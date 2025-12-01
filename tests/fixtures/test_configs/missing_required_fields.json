@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "name": "incomplete_test",
+      "sequence": [
+        {
+          "match": {
+            "type": "regex",
+            "path": "messages.0.content"
+          },
+          "response": {
+            "role": "assistant",
+            "content": []
+          }
+        }
+      ]
+    }
+  ]
+}
