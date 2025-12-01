@@ -1,0 +1,11 @@
+{
+  "name": "invalid_json_tool",
+  "description": "An invalid JSON tool - missing required input_schema type field",
+  "input_schema": {
+    "properties": {
+      "param": {
+        "type": "string"
+      }
+    }
+  }
+}

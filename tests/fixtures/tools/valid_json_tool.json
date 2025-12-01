@@ -1,0 +1,18 @@
+{
+  "name": "valid_json_tool",
+  "description": "A valid JSON tool fixture for testing",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "file_path": {
+        "type": "string",
+        "description": "Path to the file"
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Maximum number of lines to read"
+      }
+    },
+    "required": ["file_path"]
+  }
+}
