@@ -1,0 +1,1000 @@
+"""
+AnthropIDE Web Application
+
+This module implements the Bottle web application with REST API endpoints for
+project and session management. It provides the backend for the AnthropIDE UI.
+"""
+
+import json
+import logging
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from bottle import (
+    Bottle,
+    request,
+    response,
+    static_file,
+    HTTPError,
+)
+
+import config
+from lib.data_models import Project, Session, UIState
+from lib.project_manager import (
+    ProjectManager,
+    ProjectError,
+    ProjectNotFoundError,
+    ProjectAlreadyExistsError,
+)
+from lib.session_manager import (
+    SessionManager,
+    SessionManagerError,
+    SessionLoadError,
+    SessionSaveError,
+)
+from lib.state_manager import (
+    StateManager,
+    StateManagerError,
+    StateLoadError,
+    StateSaveError,
+)
+
+# Set up logging
+logging.basicConfig(
+    level=getattr(logging, config.LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout,
+)
+logger = logging.getLogger(__name__)
+
+# Initialize Bottle application
+app = Bottle()
+
+# Initialize ProjectManager
+project_manager = ProjectManager(config.PROJECT_ROOT)
+
+# Initialize StateManager
+state_file_path = config.APP_ROOT / 'state.json'
+state_manager = StateManager(state_file_path)
+
+# Enable CORS for development
+@app.hook('after_request')
+def enable_cors():
+    """Enable CORS headers for all responses."""
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+
+
+@app.route('/api/projects', method='OPTIONS')
+@app.route('/api/projects/<name>', method='OPTIONS')
+@app.route('/api/projects/<name>/session', method='OPTIONS')
+@app.route('/api/projects/<name>/session/new', method='OPTIONS')
+@app.route('/api/projects/<name>/session/backups', method='OPTIONS')
+@app.route('/api/projects/<name>/session/restore', method='OPTIONS')
+@app.route('/api/projects/<name>/session/backups/<filename>', method='OPTIONS')
+@app.route('/api/state', method='OPTIONS')
+def handle_options(**kwargs):
+    """Handle OPTIONS requests for CORS preflight."""
+    return {}
+
+
+# ============================================================================
+# Project Management API Endpoints (Section 4.1)
+# ============================================================================
+
+@app.route('/api/projects', method='GET')
+def list_projects():
+    """
+    List all available projects.
+
+    Returns:
+        JSON response with list of projects
+
+    Response:
+        {
+            "projects": [
+                {
+                    "name": "example_project",
+                    "description": "Example project description",
+                    "created": "2025-11-30T14:30:00Z",
+                    "modified": "2025-11-30T15:45:00Z"
+                }
+            ]
+        }
+    """
+    try:
+        projects = project_manager.list_projects()
+
+        # Convert Project objects to dict format for JSON response
+        projects_data = []
+        for project in projects:
+            projects_data.append({
+                'name': project.name,
+                'description': project.description,
+                'created': project.created.isoformat(),
+                'modified': project.modified.isoformat(),
+            })
+
+        logger.info(f"Listed {len(projects_data)} projects")
+        return {'projects': projects_data}
+
+    except ProjectError as e:
+        logger.error(f"Failed to list projects: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': f'Failed to list projects: {str(e)}',
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error listing projects: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+@app.route('/api/projects', method='POST')
+def create_project():
+    """
+    Create a new project.
+
+    Request Body:
+        {
+            "name": "my_new_project",
+            "description": "Optional description"
+        }
+
+    Returns:
+        JSON response with created project information
+
+    Response:
+        {
+            "success": true,
+            "project": {
+                "name": "my_new_project",
+                "path": "/path/to/projects/my_new_project"
+            }
+        }
+    """
+    try:
+        # Parse request body
+        try:
+            data = request.json
+        except Exception as e:
+            logger.warning(f"Invalid JSON in request: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Invalid JSON in request body',
+            }
+
+        if not data:
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Request body is required',
+            }
+
+        # Validate required fields
+        name = data.get('name')
+        if not name:
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Project name is required',
+            }
+
+        description = data.get('description')
+
+        # Create project
+        project = project_manager.create_project(
+            name=name,
+            description=description,
+        )
+
+        project_path = config.PROJECT_ROOT / name
+
+        logger.info(f"Created project: {name}")
+        response.status = 201
+        return {
+            'success': True,
+            'project': {
+                'name': project.name,
+                'path': str(project_path),
+            },
+        }
+
+    except ProjectAlreadyExistsError as e:
+        logger.warning(f"Project already exists: {e}")
+        response.status = 400
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except ProjectError as e:
+        logger.error(f"Failed to create project: {e}")
+        response.status = 400
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error creating project: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+@app.route('/api/projects/<name>', method='GET')
+def load_project(name: str):
+    """
+    Load a project and verify its structure.
+
+    Args:
+        name: Project name
+
+    Returns:
+        JSON response with project details and structure validation
+
+    Response:
+        {
+            "name": "example_project",
+            "structure_valid": true,
+            "missing_files": [],
+            "agents": ["code-reviewer", "test-writer"],
+            "skills": ["web-search", "code-analysis"],
+            "tools": ["Read", "Edit", "Bash"],
+            "snippet_categories": ["development", "documentation"]
+        }
+    """
+    try:
+        # Load and validate project
+        project = project_manager.load_project(name)
+        project_path = config.PROJECT_ROOT / name
+
+        # Get project structure information
+        agents = project_manager._list_agents(project_path)
+        skills = project_manager._list_skills(project_path)
+        tools = project_manager._list_tools(project_path)
+        snippet_categories = project_manager._list_snippet_categories(project_path)
+
+        # Check for missing files
+        missing = project_manager._validate_project_structure(project_path)
+
+        logger.info(f"Loaded project: {name}")
+        return {
+            'name': project.name,
+            'structure_valid': len(missing) == 0,
+            'missing_files': missing,
+            'agents': agents,
+            'skills': skills,
+            'tools': tools,
+            'snippet_categories': snippet_categories,
+        }
+
+    except ProjectNotFoundError as e:
+        logger.warning(f"Project not found: {e}")
+        response.status = 404
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except ProjectError as e:
+        logger.error(f"Failed to load project: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error loading project: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+@app.route('/api/projects/<name>', method='DELETE')
+def delete_project(name: str):
+    """
+    Delete a project and all its contents.
+
+    Args:
+        name: Project name
+
+    Returns:
+        JSON response indicating success or failure
+
+    Response:
+        {
+            "success": true,
+            "message": "Project deleted"
+        }
+    """
+    try:
+        # Delete project
+        project_manager.delete_project(name)
+
+        logger.info(f"Deleted project: {name}")
+        return {
+            'success': True,
+            'message': 'Project deleted',
+        }
+
+    except ProjectNotFoundError as e:
+        logger.warning(f"Project not found: {e}")
+        response.status = 404
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except ProjectError as e:
+        logger.error(f"Failed to delete project: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error deleting project: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+# ============================================================================
+# Session Management API Endpoints (Section 4.2)
+# ============================================================================
+
+@app.route('/api/projects/<name>/session', method='GET')
+def load_session(name: str):
+    """
+    Load current session for a project.
+
+    Args:
+        name: Project name
+
+    Returns:
+        Complete current_session.json content
+
+    Response:
+        Complete Session JSON structure (Anthropic API request format)
+    """
+    try:
+        # Verify project exists
+        project_path = config.PROJECT_ROOT / name
+        if not project_path.exists():
+            response.status = 404
+            return {
+                'success': False,
+                'error': f'Project "{name}" does not exist',
+            }
+
+        # Load session
+        session_manager = SessionManager(project_path)
+        session = session_manager.load_session()
+
+        if session is None:
+            # No session file or invalid JSON - return empty session
+            logger.warning(f"No valid session found for project: {name}")
+            response.status = 404
+            return {
+                'success': False,
+                'error': 'No valid session found',
+            }
+
+        # Return session as JSON
+        session_data = session.model_dump(mode='json')
+        logger.info(f"Loaded session for project: {name}")
+        return session_data
+
+    except SessionLoadError as e:
+        logger.error(f"Failed to load session: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error loading session: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+@app.route('/api/projects/<name>/session', method='POST')
+def save_session(name: str):
+    """
+    Save session (auto-save on every change).
+
+    Args:
+        name: Project name
+
+    Request Body:
+        Complete Session JSON structure
+
+    Returns:
+        JSON response indicating success
+
+    Response:
+        {
+            "success": true,
+            "saved_at": "2025-11-30T15:45:00Z"
+        }
+    """
+    try:
+        # Verify project exists
+        project_path = config.PROJECT_ROOT / name
+        if not project_path.exists():
+            response.status = 404
+            return {
+                'success': False,
+                'error': f'Project "{name}" does not exist',
+            }
+
+        # Parse request body
+        try:
+            session_data = request.json
+        except Exception as e:
+            logger.warning(f"Invalid JSON in request: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Invalid JSON in request body',
+            }
+
+        if not session_data:
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Request body is required',
+            }
+
+        # Validate and create Session object
+        try:
+            session = Session(**session_data)
+        except Exception as e:
+            logger.warning(f"Invalid session data: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': f'Invalid session data: {str(e)}',
+            }
+
+        # Optional validation (doesn't block save)
+        try:
+            session.validate()
+        except Exception as e:
+            logger.warning(f"Session validation warning: {e}")
+            # Continue with save despite validation warning
+
+        # Save session
+        session_manager = SessionManager(project_path)
+        session_manager.save_session(session)
+
+        saved_at = datetime.now().isoformat()
+        logger.info(f"Saved session for project: {name}")
+        return {
+            'success': True,
+            'saved_at': saved_at,
+        }
+
+    except SessionSaveError as e:
+        logger.error(f"Failed to save session: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error saving session: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+@app.route('/api/projects/<name>/session/new', method='POST')
+def create_new_session(name: str):
+    """
+    Create new session (backs up current session).
+
+    Args:
+        name: Project name
+
+    Returns:
+        JSON response with backup info and new empty session
+
+    Response:
+        {
+            "success": true,
+            "backup_file": "current_session.json.202511301545",
+            "new_session": {...}
+        }
+    """
+    try:
+        # Verify project exists
+        project_path = config.PROJECT_ROOT / name
+        if not project_path.exists():
+            response.status = 404
+            return {
+                'success': False,
+                'error': f'Project "{name}" does not exist',
+            }
+
+        # Load project to get default model
+        project = project_manager.load_project_metadata(name)
+
+        # Create backup of current session
+        session_manager = SessionManager(project_path)
+        backup_path = session_manager.create_backup()
+
+        backup_filename = backup_path.name if backup_path else None
+
+        # Create new empty session with project defaults
+        new_session = Session(
+            model=project.settings.default_model,
+            max_tokens=8192,
+            temperature=1.0,
+            system=[],
+            tools=[],
+            messages=[],
+        )
+
+        # Save new session
+        session_manager.save_session(new_session)
+
+        logger.info(f"Created new session for project: {name}")
+        return {
+            'success': True,
+            'backup_file': backup_filename,
+            'new_session': new_session.model_dump(mode='json'),
+        }
+
+    except ProjectError as e:
+        logger.error(f"Project error: {e}")
+        response.status = 404 if isinstance(e, ProjectNotFoundError) else 500
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except SessionManagerError as e:
+        logger.error(f"Session error: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error creating new session: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+@app.route('/api/projects/<name>/session/backups', method='GET')
+def list_backups(name: str):
+    """
+    List available session backups.
+
+    Args:
+        name: Project name
+
+    Returns:
+        JSON response with list of backups
+
+    Response:
+        {
+            "backups": [
+                {
+                    "filename": "current_session.json.202511301545",
+                    "timestamp": "2025-11-30T15:45:00Z",
+                    "size": 12345,
+                    "created": "2025-11-30T15:45:00Z"
+                }
+            ]
+        }
+    """
+    try:
+        # Verify project exists
+        project_path = config.PROJECT_ROOT / name
+        if not project_path.exists():
+            response.status = 404
+            return {
+                'success': False,
+                'error': f'Project "{name}" does not exist',
+            }
+
+        # List backups
+        session_manager = SessionManager(project_path)
+        backups = session_manager.list_backups()
+
+        # Convert BackupInfo objects to dict format
+        backups_data = [backup.to_dict() for backup in backups]
+
+        logger.info(f"Listed {len(backups_data)} backups for project: {name}")
+        return {'backups': backups_data}
+
+    except SessionManagerError as e:
+        logger.error(f"Failed to list backups: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error listing backups: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+@app.route('/api/projects/<name>/session/restore', method='POST')
+def restore_backup(name: str):
+    """
+    Restore a session backup.
+
+    Args:
+        name: Project name
+
+    Request Body:
+        {
+            "backup_filename": "current_session.json.202511301545"
+        }
+
+    Returns:
+        JSON response with restored session
+
+    Response:
+        {
+            "success": true,
+            "session": {...}
+        }
+    """
+    try:
+        # Verify project exists
+        project_path = config.PROJECT_ROOT / name
+        if not project_path.exists():
+            response.status = 404
+            return {
+                'success': False,
+                'error': f'Project "{name}" does not exist',
+            }
+
+        # Parse request body
+        try:
+            data = request.json
+        except Exception as e:
+            logger.warning(f"Invalid JSON in request: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Invalid JSON in request body',
+            }
+
+        if not data:
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Request body is required',
+            }
+
+        # Validate required fields
+        backup_filename = data.get('backup_filename')
+        if not backup_filename:
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'backup_filename is required',
+            }
+
+        # Restore backup
+        session_manager = SessionManager(project_path)
+        session_manager.restore_backup(backup_filename)
+
+        # Load restored session
+        session = session_manager.load_session()
+        session_data = session.model_dump(mode='json') if session else {}
+
+        logger.info(f"Restored backup for project: {name}")
+        return {
+            'success': True,
+            'session': session_data,
+        }
+
+    except SessionManagerError as e:
+        logger.error(f"Failed to restore backup: {e}")
+        # Check if it's a "not found" error
+        if 'does not exist' in str(e):
+            response.status = 404
+        else:
+            response.status = 500
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error restoring backup: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+@app.route('/api/projects/<name>/session/backups/<filename>', method='DELETE')
+def delete_backup(name: str, filename: str):
+    """
+    Delete a session backup.
+
+    Args:
+        name: Project name
+        filename: Backup filename to delete
+
+    Returns:
+        JSON response indicating success or failure
+
+    Response:
+        {
+            "success": true,
+            "message": "Backup deleted"
+        }
+    """
+    try:
+        # Verify project exists
+        project_path = config.PROJECT_ROOT / name
+        if not project_path.exists():
+            response.status = 404
+            return {
+                'success': False,
+                'error': f'Project "{name}" does not exist',
+            }
+
+        # Delete backup
+        session_manager = SessionManager(project_path)
+        session_manager.delete_backup(filename)
+
+        logger.info(f"Deleted backup {filename} for project: {name}")
+        return {
+            'success': True,
+            'message': 'Backup deleted',
+        }
+
+    except SessionManagerError as e:
+        logger.error(f"Failed to delete backup: {e}")
+        # Check if it's a "not found" error or invalid filename
+        if 'does not exist' in str(e):
+            response.status = 404
+        elif 'Invalid backup filename' in str(e):
+            response.status = 400
+        else:
+            response.status = 500
+        return {
+            'success': False,
+            'error': str(e),
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error deleting backup: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+# ============================================================================
+# State Management API Endpoints (Section 4.3)
+# ============================================================================
+
+@app.route('/api/state', method='GET')
+def get_state():
+    """
+    Get global UI state.
+
+    Returns:
+        JSON response with complete UI state
+
+    Response:
+        {
+            "version": "1.0",
+            "selected_project": "example_project",
+            "ui": {
+                "sidebar": {"width": 300},
+                "theme": "dark"
+            },
+            "last_modified": "2025-12-01T10:30:00Z"
+        }
+    """
+    try:
+        state = state_manager.load_state()
+
+        # Convert to dict for JSON response
+        state_data = state.model_dump(mode='json')
+
+        logger.info("Loaded global UI state")
+        return state_data
+
+    except StateLoadError as e:
+        logger.error(f"Failed to load state: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': f'Failed to load state: {str(e)}',
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error loading state: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+@app.route('/api/state', method='POST')
+def save_state_endpoint():
+    """
+    Save global UI state.
+
+    Request Body:
+        Complete UIState JSON structure
+        {
+            "version": "1.0",
+            "selected_project": "example_project",
+            "ui": {
+                "sidebar": {"width": 300},
+                "theme": "dark"
+            },
+            "last_modified": "2025-12-01T10:30:00Z"
+        }
+
+    Returns:
+        JSON response indicating success
+
+    Response:
+        {
+            "success": true,
+            "saved_at": "2025-12-01T10:30:00Z"
+        }
+    """
+    try:
+        # Parse request body
+        try:
+            state_data = request.json
+        except Exception as e:
+            logger.warning(f"Invalid JSON in request: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Invalid JSON in request body',
+            }
+
+        if not state_data:
+            response.status = 400
+            return {
+                'success': False,
+                'error': 'Request body is required',
+            }
+
+        # Validate and create UIState object
+        try:
+            state = UIState(**state_data)
+        except Exception as e:
+            logger.warning(f"Invalid state data: {e}")
+            response.status = 400
+            return {
+                'success': False,
+                'error': f'Invalid state data: {str(e)}',
+            }
+
+        # Save state
+        state_manager.save_state(state)
+
+        saved_at = datetime.now().isoformat()
+        logger.info("Saved global UI state")
+        return {
+            'success': True,
+            'saved_at': saved_at,
+        }
+
+    except StateSaveError as e:
+        logger.error(f"Failed to save state: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': f'Failed to save state: {str(e)}',
+        }
+    except Exception as e:
+        logger.exception(f"Unexpected error saving state: {e}")
+        response.status = 500
+        return {
+            'success': False,
+            'error': 'Internal server error',
+        }
+
+
+# ============================================================================
+# Static file serving
+# ============================================================================
+
+@app.route('/static/<filepath:path>')
+def serve_static(filepath):
+    """Serve static files (CSS, JS, images)."""
+    return static_file(filepath, root=config.STATIC_ROOT)
+
+
+@app.route('/')
+def index():
+    """Serve the main application page."""
+    # For now, return a simple API info page
+    # TODO: Serve index.html template when UI is implemented
+    return {
+        'name': 'AnthropIDE API',
+        'version': '1.0.0',
+        'endpoints': {
+            'projects': '/api/projects',
+            'session': '/api/projects/<name>/session',
+        },
+    }
+
+
+# ============================================================================
+# Error handlers
+# ============================================================================
+
+@app.error(404)
+def error404(err):
+    """Handle 404 errors."""
+    response.content_type = 'application/json'
+    return json.dumps({
+        'success': False,
+        'error': 'Not found',
+    })
+
+
+@app.error(500)
+def error500(err):
+    """Handle 500 errors."""
+    response.content_type = 'application/json'
+    logger.exception("Internal server error")
+    return json.dumps({
+        'success': False,
+        'error': 'Internal server error',
+    })
+
+
+# ============================================================================
+# Application entry point
+# ============================================================================
+
+def main():
+    """Run the Bottle application."""
+    logger.info(f"Starting AnthropIDE server on {config.HOST}:{config.PORT}")
+    logger.info(f"Projects directory: {config.PROJECT_ROOT}")
+    logger.info(f"Debug mode: {config.DEBUG}")
+
+    app.run(
+        host=config.HOST,
+        port=config.PORT,
+        debug=config.DEBUG,
+        reloader=config.RELOADER,
+    )
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AnthropIDE{% endblock %}</title>
+
+    <!-- jQuery and jQuery UI -->
+    <link rel="stylesheet" href="/static/lib/jquery-ui/jquery-ui.min.css">
+    <link rel="stylesheet" href="/static/lib/jquery-ui/jquery-ui.theme.min.css">
+
+    <!-- CodeMirror -->
+    <link rel="stylesheet" href="/static/lib/codemirror/codemirror.css">
+    <link rel="stylesheet" href="/static/lib/codemirror/theme/default.css">
+
+    <!-- Application CSS -->
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/widgets.css">
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Header Bar -->
+    <header id="app-header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1 class="app-logo">AnthropIDE</h1>
+                {% include 'partials/project_selector.html' %}
+            </div>
+            <div class="header-right">
+                <button id="btn-new-project" class="btn btn-primary">New Project</button>
+                <button id="btn-export-project" class="btn btn-secondary">Export</button>
+                <button id="btn-package-settings" class="btn btn-secondary">Package Settings</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="app-main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- jQuery -->
+    <script src="/static/lib/jquery/jquery.min.js"></script>
+    <script src="/static/lib/jquery-ui/jquery-ui.min.js"></script>
+
+    <!-- CodeMirror -->
+    <script src="/static/lib/codemirror/codemirror.js"></script>
+    <script src="/static/lib/codemirror/mode/markdown/markdown.js"></script>
+    <script src="/static/lib/codemirror/mode/javascript/javascript.js"></script>
+    <script src="/static/lib/codemirror/mode/python/python.js"></script>
+
+    <!-- Marked for markdown rendering -->
+    <script src="/static/lib/marked/marked.min.js"></script>
+
+    <!-- Application JavaScript -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/modal.js"></script>
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/project.js"></script>
+    <script src="/static/js/session.js"></script>
+    <script src="/static/js/agents.js"></script>
+    <script src="/static/js/skills.js"></script>
+    <script src="/static/js/tools.js"></script>
+    <script src="/static/js/snippets.js"></script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

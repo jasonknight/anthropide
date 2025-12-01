@@ -1,0 +1,68 @@
+<div id="session-editor" class="session-editor">
+    <!-- Session Actions -->
+    <div class="session-actions">
+        <button id="btn-new-session" class="btn btn-secondary">New Session</button>
+        <button id="btn-load-session" class="btn btn-secondary">Load Backup</button>
+        <button id="btn-execute-session" class="btn btn-success">▶ Execute</button>
+        <span id="session-status" class="session-status"></span>
+    </div>
+
+    <!-- Model Configuration -->
+    <div class="widget-section">
+        <h3 class="section-title">Model Configuration</h3>
+        <div class="form-row">
+            <label for="model-select">Model:</label>
+            <select id="model-select" class="form-control">
+                <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+                <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label for="max-tokens">Max Tokens:</label>
+            <input type="number" id="max-tokens" class="form-control" value="8192" min="1" max="200000">
+        </div>
+        <div class="form-row">
+            <label for="temperature">Temperature:</label>
+            <input type="range" id="temperature" class="form-control-range" min="0" max="1" step="0.1" value="1.0">
+            <span id="temperature-value" class="value-display">1.0</span>
+        </div>
+    </div>
+
+    <!-- System Prompts Section -->
+    <div class="widget-section collapsible">
+        <div class="section-header" data-section="system-prompts">
+            <span class="collapse-icon">▼</span>
+            <h3 class="section-title">System Prompts (<span id="system-prompts-count">0</span>)</h3>
+            <button id="btn-add-system-prompt" class="btn btn-sm btn-primary">+ Add</button>
+        </div>
+        <div id="system-prompts-list" class="section-content drop-zone">
+            <!-- System prompt blocks populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Tools Section -->
+    <div class="widget-section collapsible">
+        <div class="section-header" data-section="tools">
+            <span class="collapse-icon">▼</span>
+            <h3 class="section-title">Tools (<span id="tools-count">0</span>)</h3>
+            <button id="btn-add-tool" class="btn btn-sm btn-primary">+ Add</button>
+        </div>
+        <div id="tools-list" class="section-content">
+            <!-- Tool items populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Messages Section -->
+    <div class="widget-section collapsible">
+        <div class="section-header" data-section="messages">
+            <span class="collapse-icon">▼</span>
+            <h3 class="section-title">Messages (<span id="messages-count">0</span>)</h3>
+            <button id="btn-add-message" class="btn btn-sm btn-primary">+ Add</button>
+        </div>
+        <div id="messages-list" class="section-content drop-zone sortable">
+            <!-- Message blocks populated by JavaScript -->
+        </div>
+    </div>
+</div>

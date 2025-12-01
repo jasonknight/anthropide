@@ -1,0 +1,481 @@
+<!-- New Project Modal -->
+<div id="modal-new-project" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create New Project</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="form-new-project">
+                <div class="form-group">
+                    <label for="new-project-name">Project Name:</label>
+                    <input type="text" id="new-project-name" class="form-control"
+                           pattern="[a-zA-Z0-9_-]+"
+                           placeholder="my_project" required>
+                    <small class="form-text">Alphanumeric characters, underscores, and hyphens only</small>
+                </div>
+                <div class="form-group">
+                    <label for="new-project-description">Description (optional):</label>
+                    <textarea id="new-project-description" class="form-control"
+                              rows="3" placeholder="Project description..."></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button id="btn-create-project" class="btn btn-primary">Create</button>
+            <button class="btn btn-secondary modal-close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Snippet Editor Modal -->
+<div id="modal-snippet-editor" class="modal modal-large" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Snippet</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="snippet-name">Name:</label>
+                <input type="text" id="snippet-name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="snippet-category">Category:</label>
+                <select id="snippet-category" class="form-control">
+                    <option value="">Root</option>
+                    <!-- Categories populated by JavaScript -->
+                </select>
+            </div>
+            <div class="editor-split-view">
+                <div class="editor-pane">
+                    <h4>Editor</h4>
+                    <textarea id="snippet-editor"></textarea>
+                </div>
+                <div class="preview-pane">
+                    <h4>Preview</h4>
+                    <div id="snippet-preview" class="markdown-preview"></div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="btn-save-snippet" class="btn btn-primary">Save</button>
+            <button id="btn-delete-snippet" class="btn btn-danger">Delete</button>
+            <button class="btn btn-secondary modal-close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Agent Editor Modal -->
+<div id="modal-agent-editor" class="modal modal-large" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Agent</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="agent-config-section">
+                <h3>Configuration</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="agent-name">Name:</label>
+                        <input type="text" id="agent-name" class="form-control"
+                               pattern="[a-zA-Z0-9_-]+" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="agent-color">Color:</label>
+                        <select id="agent-color" class="form-control">
+                            <option value="blue">Blue</option>
+                            <option value="green">Green</option>
+                            <option value="red">Red</option>
+                            <option value="yellow">Yellow</option>
+                            <option value="purple">Purple</option>
+                            <option value="orange">Orange</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="agent-description">Description:</label>
+                    <textarea id="agent-description" class="form-control"
+                              rows="3" required></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="agent-model">Model:</label>
+                        <select id="agent-model" class="form-control">
+                            <option value="inherit">Inherit from Parent</option>
+                            <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+                            <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                            <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                            <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="agent-tools">Tools:</label>
+                        <select id="agent-tools" class="form-control" multiple size="5">
+                            <!-- Tools populated by JavaScript -->
+                        </select>
+                        <small class="form-text">Hold Ctrl/Cmd to select multiple</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="agent-skills">Skills:</label>
+                        <select id="agent-skills" class="form-control" multiple size="5">
+                            <!-- Skills populated by JavaScript -->
+                        </select>
+                        <small class="form-text">Hold Ctrl/Cmd to select multiple</small>
+                    </div>
+                </div>
+            </div>
+            <div class="agent-prompt-section">
+                <h3>System Prompt</h3>
+                <div class="editor-split-view">
+                    <div class="editor-pane">
+                        <textarea id="agent-prompt-editor"></textarea>
+                    </div>
+                    <div class="preview-pane">
+                        <div id="agent-prompt-preview" class="markdown-preview"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="btn-save-agent" class="btn btn-primary">Save</button>
+            <button id="btn-delete-agent" class="btn btn-danger">Delete</button>
+            <button class="btn btn-secondary modal-close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Skill Editor Modal -->
+<div id="modal-skill-editor" class="modal modal-large" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Skill</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="skill-metadata">
+                <div class="form-group">
+                    <label for="skill-name">Name:</label>
+                    <input type="text" id="skill-name" class="form-control"
+                           pattern="[a-zA-Z0-9_-]+" required>
+                </div>
+                <div class="form-group">
+                    <label for="skill-description">Description:</label>
+                    <textarea id="skill-description" class="form-control"
+                              rows="2" required></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="skill-version">Version:</label>
+                        <input type="text" id="skill-version" class="form-control"
+                               placeholder="1.0.0">
+                    </div>
+                    <div class="form-group">
+                        <label for="skill-author">Author:</label>
+                        <input type="text" id="skill-author" class="form-control"
+                               placeholder="Your Name">
+                    </div>
+                </div>
+            </div>
+            <div class="skill-content-section">
+                <div class="editor-split-view vertical">
+                    <div class="editor-pane">
+                        <h4>Content</h4>
+                        <textarea id="skill-content-editor"></textarea>
+                    </div>
+                    <div class="preview-pane">
+                        <h4>Preview</h4>
+                        <div id="skill-content-preview" class="markdown-preview"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="btn-save-skill" class="btn btn-primary">Save</button>
+            <button id="btn-delete-skill" class="btn btn-danger">Delete</button>
+            <button class="btn btn-secondary modal-close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Tool Editor Modal -->
+<div id="modal-tool-editor" class="modal modal-large" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Tool</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Tool Type:</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="tool-type" value="json" checked>
+                        JSON Schema Only
+                    </label>
+                    <label>
+                        <input type="radio" name="tool-type" value="python">
+                        Python Implementation
+                    </label>
+                </div>
+            </div>
+
+            <!-- JSON Tool Form -->
+            <div id="json-tool-form" class="tool-form">
+                <div class="form-group">
+                    <label for="tool-name">Tool Name:</label>
+                    <input type="text" id="tool-name" class="form-control"
+                           pattern="[a-zA-Z][a-zA-Z0-9_]*" required>
+                </div>
+                <div class="form-group">
+                    <label for="tool-description">Description:</label>
+                    <textarea id="tool-description" class="form-control"
+                              rows="2" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="tool-schema">Input Schema (JSON):</label>
+                    <textarea id="tool-schema-editor"></textarea>
+                </div>
+            </div>
+
+            <!-- Python Tool Form -->
+            <div id="python-tool-form" class="tool-form" style="display: none;">
+                <div class="form-group">
+                    <label for="python-tool-name">Tool Name:</label>
+                    <input type="text" id="python-tool-name" class="form-control"
+                           pattern="[a-zA-Z][a-zA-Z0-9_]*" readonly>
+                    <small class="form-text">Derived from filename</small>
+                </div>
+                <div class="form-group">
+                    <label for="python-tool-code">Python Code:</label>
+                    <textarea id="python-tool-editor"></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="btn-save-tool" class="btn btn-primary">Save</button>
+            <button id="btn-test-tool" class="btn btn-secondary">Test</button>
+            <button id="btn-delete-tool" class="btn btn-danger">Delete</button>
+            <button class="btn btn-secondary modal-close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Message Editor Modal -->
+<div id="modal-message-editor" class="modal modal-large" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Message</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="message-role">Role:</label>
+                <select id="message-role" class="form-control">
+                    <option value="user">User</option>
+                    <option value="assistant">Assistant</option>
+                </select>
+            </div>
+
+            <div class="message-content-blocks">
+                <div class="section-header">
+                    <h3>Content Blocks</h3>
+                    <button id="btn-add-content-block" class="btn btn-sm btn-primary">+ Add Block</button>
+                </div>
+                <div id="content-blocks-list" class="sortable">
+                    <!-- Content blocks populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="btn-save-message" class="btn btn-primary">Save</button>
+            <button class="btn btn-secondary modal-close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- System Prompt Editor Modal -->
+<div id="modal-system-prompt-editor" class="modal modal-large" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit System Prompt</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="system-prompt-type">Type:</label>
+                <select id="system-prompt-type" class="form-control">
+                    <option value="text">Text</option>
+                    <option value="image">Image</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="system-prompt-cache">
+                    Enable Prompt Caching
+                </label>
+                <small class="form-text">Cache this system prompt block for improved performance</small>
+            </div>
+
+            <!-- Text Content -->
+            <div id="system-prompt-text-content" class="editor-split-view">
+                <div class="editor-pane">
+                    <h4>Content</h4>
+                    <textarea id="system-prompt-text-editor"></textarea>
+                </div>
+                <div class="preview-pane">
+                    <h4>Preview</h4>
+                    <div id="system-prompt-preview" class="markdown-preview"></div>
+                </div>
+            </div>
+
+            <!-- Image Content -->
+            <div id="system-prompt-image-content" style="display: none;">
+                <div class="form-group">
+                    <label for="system-prompt-image-url">Image URL:</label>
+                    <input type="url" id="system-prompt-image-url" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="system-prompt-image-data">Or Base64 Data:</label>
+                    <textarea id="system-prompt-image-data" class="form-control"
+                              rows="4" placeholder="data:image/png;base64,..."></textarea>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="btn-save-system-prompt" class="btn btn-primary">Save</button>
+            <button class="btn btn-secondary modal-close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Session Browser Modal -->
+<div id="modal-session-browser" class="modal modal-medium" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Session History</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="session-backups-list" class="backups-list">
+                <!-- Session backups populated by JavaScript -->
+                <div class="empty-state">
+                    <p>No session backups available.</p>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary modal-close">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- Package Config Modal -->
+<div id="modal-package-config" class="modal modal-medium" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Package Configuration</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>API Key Strategy:</label>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="api-key-strategy" value="cli_argument" checked>
+                        CLI Argument (--api-key or env var) <span class="badge badge-success">Recommended</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="api-key-strategy" value="env_file">
+                        Environment File (.env in project directory)
+                    </label>
+                    <label>
+                        <input type="radio" name="api-key-strategy" value="embedded">
+                        Embedded <span class="badge badge-warning">⚠️ Key stored in package</span>
+                    </label>
+                    <label>
+                        <input type="radio" name="api-key-strategy" value="prompt">
+                        Prompt User (ask on first run)
+                    </label>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="dependencies-checked" checked>
+                    Check dependencies on CLI startup
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="requirements-preview">requirements.txt:</label>
+                <textarea id="requirements-preview" class="form-control"
+                          rows="6" readonly></textarea>
+                <button id="btn-edit-requirements" class="btn btn-sm btn-secondary">Edit in Full Editor</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="btn-save-package-config" class="btn btn-primary">Save</button>
+            <button class="btn btn-secondary modal-close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Raw JSON Editor Modal (Error Recovery) -->
+<div id="modal-json-editor" class="modal modal-fullscreen" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header error">
+            <h2>⚠️ Session File Error</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="error-message">
+                <strong>Error:</strong> <span id="json-error-text"></span>
+            </div>
+            <p>The session file contains invalid JSON. You can edit it directly below to fix the issue.</p>
+
+            <div class="json-editor-wrapper">
+                <textarea id="json-raw-editor"></textarea>
+            </div>
+
+            <div class="validation-result">
+                <button id="btn-validate-json" class="btn btn-secondary">Validate JSON</button>
+                <span id="validation-status"></span>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="btn-save-json" class="btn btn-primary">Save</button>
+            <button class="btn btn-secondary modal-close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Dialog -->
+<div id="modal-confirm" class="modal modal-small" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="confirm-title">Confirm Action</h2>
+            <button class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p id="confirm-message"></p>
+        </div>
+        <div class="modal-footer">
+            <button id="btn-confirm-yes" class="btn btn-danger">Confirm</button>
+            <button class="btn btn-secondary modal-close">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" style="display: none;">
+    <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p id="loading-message">Loading...</p>
+    </div>
+</div>

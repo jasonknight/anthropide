@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}AnthropIDE - {{ project_name or 'No Project' }}{% endblock %}
+
+{% block content %}
+<div id="app-container">
+    <!-- Left Sidebar: Snippet Browser -->
+    <aside id="sidebar-left" class="sidebar">
+        {% include 'partials/snippet_browser.html' %}
+    </aside>
+
+    <!-- Main Content Area -->
+    <div id="main-content">
+        <!-- Tab Navigation -->
+        <nav id="main-tabs" class="tab-navigation">
+            <button class="tab-btn active" data-tab="session">Session</button>
+            <button class="tab-btn" data-tab="agents">Agents</button>
+            <button class="tab-btn" data-tab="skills">Skills</button>
+            <button class="tab-btn" data-tab="tools">Tools</button>
+        </nav>
+
+        <!-- Tab Content -->
+        <div id="tab-content">
+            <!-- Session Tab -->
+            <div id="tab-session" class="tab-pane active">
+                {% include 'partials/session_editor.html' %}
+            </div>
+
+            <!-- Agents Tab -->
+            <div id="tab-agents" class="tab-pane">
+                <div class="tab-header">
+                    <h2>Agents</h2>
+                    <button id="btn-new-agent" class="btn btn-primary">+ New Agent</button>
+                </div>
+                <div id="agents-list" class="resource-list">
+                    <!-- Agent cards populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Skills Tab -->
+            <div id="tab-skills" class="tab-pane">
+                <div class="tab-header">
+                    <h2>Skills</h2>
+                    <button id="btn-new-skill" class="btn btn-primary">+ New Skill</button>
+                </div>
+                <div id="skills-list" class="resource-list">
+                    <!-- Skill cards populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Tools Tab -->
+            <div id="tab-tools" class="tab-pane">
+                <div class="tab-header">
+                    <h2>Tools</h2>
+                    <button id="btn-new-tool" class="btn btn-primary">+ New Tool</button>
+                </div>
+                <div id="tools-list" class="resource-list">
+                    <!-- Tool cards populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+{% include 'partials/modals.html' %}
+{% endblock %}
