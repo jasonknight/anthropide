@@ -36,7 +36,7 @@ ALLOWED_PROJECT_NAME_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789_-'
 MAX_SNIPPET_CATEGORIES = 2  # Only two levels of nesting
 
 # Server settings
-HOST = os.getenv('ANTHROPIDE_HOST', '127.0.0.1')
+HOST = os.getenv('ANTHROPIDE_HOST', '0.0.0.0')
 PORT = int(os.getenv('ANTHROPIDE_PORT', '8080'))
 DEBUG = os.getenv('ANTHROPIDE_DEBUG', 'true').lower() == 'true'
 RELOADER = DEBUG

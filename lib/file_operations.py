@@ -53,6 +53,11 @@ class BackupError(FileOperationError):
     pass
 
 
+class FileDeleteError(FileOperationError):
+    """Exception raised when file deletion fails."""
+    pass
+
+
 @contextmanager
 def _file_lock(
     lock_file_path: Path,
@@ -298,6 +303,145 @@ def safe_write_json(
             raise FileWriteError(
                 f"Failed to serialize data to JSON: {e}",
             ) from e
+
+
+def safe_read_file(
+    path: Path,
+    encoding: str = 'utf-8',
+) -> str:
+    """
+    Safely read text file with error handling.
+
+    Args:
+        path: Path to text file
+        encoding: File encoding (default: utf-8)
+
+    Returns:
+        File contents as string
+
+    Raises:
+        FileReadError: If file cannot be read
+    """
+    path = Path(path)
+
+    if not path.exists():
+        raise FileReadError(f"File does not exist: {path}")
+
+    try:
+        with open(path, 'r', encoding=encoding) as f:
+            content = f.read()
+            logger.debug(f"Successfully read file: {path}")
+            return content
+    except (OSError, IOError) as e:
+        raise FileReadError(
+            f"Failed to read file {path}: {e}",
+        ) from e
+    except UnicodeDecodeError as e:
+        raise FileReadError(
+            f"Failed to decode file {path} with encoding {encoding}: {e}",
+        ) from e
+
+
+def safe_write_file(
+    path: Path,
+    content: str,
+    encoding: str = 'utf-8',
+    create_backup: bool = False,
+    backup_dir: Optional[Path] = None,
+    max_backups: int = 10,
+) -> None:
+    """
+    Safely write text file with atomic operations and file locking.
+
+    Uses atomic write (write to temp file, then rename) and file locking
+    to prevent data corruption from concurrent writes.
+
+    Args:
+        path: Path to text file
+        content: Content to write
+        encoding: File encoding (default: utf-8)
+        create_backup: Whether to create a backup before writing
+        backup_dir: Directory for backups (defaults to path.parent / 'backups')
+        max_backups: Maximum number of backups to keep
+
+    Raises:
+        FileWriteError: If file cannot be written
+    """
+    path = Path(path)
+
+    # Ensure parent directory exists
+    ensure_directory(path.parent)
+
+    # Create backup if requested and file exists
+    if create_backup and path.exists():
+        if backup_dir is None:
+            backup_dir = path.parent / 'backups'
+        try:
+            create_backup_file(
+                path=path,
+                backup_dir=backup_dir,
+                max_backups=max_backups,
+            )
+        except BackupError as e:
+            logger.warning(f"Backup creation failed: {e}")
+
+    # Use lock file to prevent concurrent writes
+    lock_file = path.with_suffix(path.suffix + '.lock')
+
+    with _file_lock(lock_file):
+        # Create temp file in same directory for atomic rename
+        temp_fd, temp_path_str = tempfile.mkstemp(
+            dir=path.parent,
+            prefix=f'.{path.name}.',
+            suffix='.tmp',
+        )
+        temp_path = Path(temp_path_str)
+
+        try:
+            # Write to temp file
+            with open(temp_fd, 'w', encoding=encoding) as f:
+                f.write(content)
+
+            # Atomic rename (replaces existing file)
+            temp_path.replace(path)
+            logger.debug(f"Successfully wrote file: {path}")
+
+        except (OSError, IOError) as e:
+            # Clean up temp file on error
+            temp_path.unlink(missing_ok=True)
+            raise FileWriteError(
+                f"Failed to write file {path}: {e}",
+            ) from e
+        except UnicodeEncodeError as e:
+            # Clean up temp file on encoding error
+            temp_path.unlink(missing_ok=True)
+            raise FileWriteError(
+                f"Failed to encode content with {encoding}: {e}",
+            ) from e
+
+
+def safe_delete_file(path: Path) -> None:
+    """
+    Safely delete a file with error handling.
+
+    Args:
+        path: Path to file to delete
+
+    Raises:
+        FileDeleteError: If file cannot be deleted
+    """
+    path = Path(path)
+
+    if not path.exists():
+        raise FileDeleteError(f"File does not exist: {path}")
+
+    try:
+        path.unlink()
+        logger.debug(f"Successfully deleted file: {path}")
+    except (OSError, IOError) as e:
+        raise FileDeleteError(
+            f"Failed to delete file {path}: {e}",
+        ) from e
 
 
 def create_backup_file(

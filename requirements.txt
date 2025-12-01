@@ -27,3 +27,6 @@ python-magic>=0.4.27
 
 # Date/Time Utilities
 python-dateutil>=2.8.2
+
+# YAML Parsing (for skills and agents)
+PyYAML>=6.0
